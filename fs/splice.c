@@ -1330,6 +1330,59 @@ long do_splice_direct(struct file *in, loff_t *ppos, struct file *out,
 }
 EXPORT_SYMBOL(do_splice_direct);
 
+/**
+ * do_splice_direct_printk - splices data directly between two files with printk
+ * @in:		file to splice from
+ * @ppos:	input file offset
+ * @out:	file to splice to
+ * @opos:	output file offset
+ * @len:	number of bytes to splice
+ * @flags:	splice modifier flags
+ * @ts:		timestamp constructor
+ *
+ * Description:
+ *    For use by do_sendfile(). splice can easily emulate sendfile, but
+ *    doing it in the application would incur an extra system call
+ *    (splice in + splice out, as compared to just sendfile()). So this helper
+ *    can splice directly through a process-private pipe.
+ *
+ */
+long do_splice_direct_printk(struct file *in, loff_t *ppos, struct file *out,
+		      loff_t *opos, size_t len, unsigned int flags, struct sendfile_timestamp *ts)
+{
+	struct splice_desc sd = {
+		.len		= len,
+		.total_len	= len,
+		.flags		= flags,
+		.pos		= *ppos,
+		.u.file		= out,
+		.opos		= opos,
+	};
+	long ret;
+
+	if (unlikely(!(out->f_mode & FMODE_WRITE)))
+		return -EBADF;
+
+	if (unlikely(out->f_flags & O_APPEND))
+		return -EINVAL;
+
+	sendfile_tp_time(&ts->dsd_rw_verify_area);
+	ret = rw_verify_area(WRITE, out, opos, len);
+	sendfile_tp_timeEnd(&ts->dsd_rw_verify_area, ret);
+	if (unlikely(ret < 0))
+		return ret;
+
+	sendfile_tp_time(&ts->dsd_splice_direct_to_actor);
+	ret = splice_direct_to_actor(in, &sd, direct_splice_actor);
+	sendfile_tp_timeEnd(&ts->dsd_splice_direct_to_actor, ret);
+	if (ret > 0)
+		*ppos = sd.pos;
+
+	return ret;
+}
+EXPORT_SYMBOL(do_splice_direct_printk);
+
+
 static int splice_pipe_to_pipe(struct pipe_inode_info *ipipe,
 			       struct pipe_inode_info *opipe,
 			       size_t len, unsigned int flags);

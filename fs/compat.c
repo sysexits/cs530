@@ -171,6 +171,18 @@ COMPAT_SYSCALL_DEFINE2(newstat, const char __user *, filename,
 	return cp_compat_stat(&stat, statbuf);
 }
 
+COMPAT_SYSCALL_DEFINE2(newstat_printk, const char __user *, filename,
+		       struct compat_stat __user *, statbuf)
+{
+	struct kstat stat;
+	int error;
+
+	error = vfs_stat(filename, &stat);
+	if (error)
+		return error;
+	return cp_compat_stat(&stat, statbuf);
+}
+
 COMPAT_SYSCALL_DEFINE2(newlstat, const char __user *, filename,
 		       struct compat_stat __user *, statbuf)
 {

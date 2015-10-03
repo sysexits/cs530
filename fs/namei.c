@@ -37,6 +37,8 @@
 #include <linux/hash.h>
 #include <asm/uaccess.h>
 
+#include <linux/timing.h>
+
 #include "internal.h"
 #include "mount.h"
 
@@ -2170,6 +2172,43 @@ static int filename_lookup(int dfd, struct filename *name, unsigned flags,
 	return retval;
 }
 
+static int filename_lookup_printk(int dfd, struct filename *name, unsigned flags,
+			   struct path *path, struct path *root, struct stat_timestamp *ts)
+{
+	int retval;
+	struct nameidata nd;
+	if (IS_ERR(name))
+		return PTR_ERR(name);
+	if (unlikely(root)) {
+		nd.root = *root;
+		flags |= LOOKUP_ROOT;
+	}
+	stat_tp_time(&ts->vfs_fstatat_userpath_lookup_setnameidata);
+	set_nameidata(&nd, dfd, name);
+	stat_tp_timeEnd(&ts->vfs_fstatat_userpath_lookup_setnameidata, 0);
+	
+	stat_tp_time(&ts->vfs_fstatat_userpath_lookup_pathlookupat);
+	retval = path_lookupat(&nd, flags | LOOKUP_RCU, path);
+	if (unlikely(retval == -ECHILD))
+		retval = path_lookupat(&nd, flags, path);
+	if (unlikely(retval == -ESTALE))
+		retval = path_lookupat(&nd, flags | LOOKUP_REVAL, path);
+	stat_tp_timeEnd(&ts->vfs_fstatat_userpath_lookup_pathlookupat, retval);
+	
+	if (likely(!retval)){
+		stat_tp_time(&ts->vfs_fstatat_userpath_lookup_auditinode);
+		audit_inode(name, path->dentry, flags & LOOKUP_PARENT);
+		stat_tp_timeEnd(&ts->vfs_fstatat_userpath_lookup_auditinode, 0);
+	}
+		
+	restore_nameidata();
+	
+	stat_tp_time(&ts->vfs_fstatat_userpath_lookup_putname);
+	putname(name);
+	stat_tp_timeEnd(&ts->vfs_fstatat_userpath_lookup_putname, 0);
+	return retval;
+}
+
 /* Returns 0 and nd will be valid on success; Retuns error, otherwise. */
 static int path_parentat(struct nameidata *nd, unsigned flags,
 				struct path *parent)
@@ -2328,6 +2367,14 @@ int user_path_at_empty(int dfd, const char __user *name, unsigned flags,
 			       flags, path, NULL);
 }
 EXPORT_SYMBOL(user_path_at_empty);
+
+int user_path_at_empty_printk(int dfd, const char __user *name, unsigned flags,
+		 struct path *path, int *empty, struct stat_timestamp *ts)
+{
+	return filename_lookup_printk(dfd, getname_flags(name, flags, empty),
+			       flags, path, NULL, ts);
+}
+EXPORT_SYMBOL(user_path_at_empty_printk);
 
 /*
  * NB: most callers don't do anything directly with the reference to the

@@ -31,6 +31,7 @@
 #include <linux/blk_types.h>
 #include <linux/workqueue.h>
 #include <linux/percpu-rwsem.h>
+#include <linux/timing.h>
 
 #include <asm/byteorder.h>
 #include <uapi/linux/fs.h>
@@ -2662,6 +2663,9 @@ extern ssize_t generic_splice_sendpage(struct pipe_inode_info *pipe,
 		struct file *out, loff_t *, size_t len, unsigned int flags);
 extern long do_splice_direct(struct file *in, loff_t *ppos, struct file *out,
 		loff_t *opos, size_t len, unsigned int flags);
+extern long do_splice_direct_printk(struct file *in, loff_t *ppos, struct file *out,
+		loff_t *opos, size_t len, unsigned int flags, struct sendfile_timestamp *ts);
+
 
 
 extern void

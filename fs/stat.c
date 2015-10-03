@@ -4,6 +4,10 @@
  *  Copyright (C) 1991, 1992  Linus Torvalds
  */
 
+// Logging macro
+#define __printk_timestamp(field, ident) \
+	if(ts->field.before) printk(KERN_ALERT "cs530\tstat\t%s\t%d\t%llu\n", ident, ts->field.value, ts->field.after - ts->field.before);
+
 #include <linux/export.h>
 #include <linux/mm.h>
 #include <linux/errno.h>
@@ -17,6 +21,34 @@
 
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
+
+#include <linux/timing.h>
+
+static void init_timestamp(struct stat_timestamp *ts){
+	ts->vfs_fstatat_userpath_lookup_setnameidata.before = 0;
+	ts->vfs_fstatat_userpath_lookup_pathlookupat.before = 0;
+	ts->vfs_fstatat_userpath_lookup_auditinode.before = 0;
+	ts->vfs_fstatat_userpath_lookup_putname.before = 0;
+	ts->vfs_fstatat_userpath.before = 0;
+	ts->vfs_fstatat_getattr_getattr.before = 0;
+	ts->vfs_fstatat_getattr_fillattr.before = 0;
+	ts->vfs_fstatat_getattr.before = 0;
+	ts->vfs_stat.before = 0;
+	ts->cp_stat.before = 0;
+}
+
+static void printk_timestamp(struct stat_timestamp *ts){
+	__printk_timestamp(vfs_fstatat_userpath_lookup_setnameidata, "vfs_fstatat user_path_at lookup set_nameidata");
+	__printk_timestamp(vfs_fstatat_userpath_lookup_pathlookupat, "vfs_fstatat user_path_at lookup path_lookupat");
+	__printk_timestamp(vfs_fstatat_userpath_lookup_auditinode, "vfs_fstatat user_path_at lookup audit_inode");
+	__printk_timestamp(vfs_fstatat_userpath_lookup_putname, "vfs_fstatat user_path_at lookup putname");
+	__printk_timestamp(vfs_fstatat_userpath, "vfs_fstatat user_path_at");
+	__printk_timestamp(vfs_fstatat_getattr_getattr, "vfs_fstatat getattr getattr");
+	__printk_timestamp(vfs_fstatat_getattr_fillattr, "vfs_fstatat getattr fillattr");
+	__printk_timestamp(vfs_fstatat_getattr, "vfs_fstatat getattr");
+	__printk_timestamp(vfs_stat, "vfs_stat");
+	__printk_timestamp(cp_stat, "cp_stat");
+}
 
 void generic_fillattr(struct inode *inode, struct kstat *stat)
 {
@@ -51,16 +83,42 @@ EXPORT_SYMBOL(generic_fillattr);
  */
 int vfs_getattr_nosec(struct path *path, struct kstat *stat)
 {
-	struct inode *inode = d_backing_inode(path->dentry);
+	struct inode *inode;
 
-	if (inode->i_op->getattr)
+	inode = d_backing_inode(path->dentry);
+
+	if (inode->i_op->getattr){
 		return inode->i_op->getattr(path->mnt, path->dentry, stat);
+	}
 
 	generic_fillattr(inode, stat);
+	
+	return 0;
+}
+
+int vfs_getattr_nosec_printk(struct path *path, struct kstat *stat, struct stat_timestamp *ts)
+{
+	struct inode *inode;
+	int res;
+
+	inode = d_backing_inode(path->dentry);
+
+	if (inode->i_op->getattr){
+		stat_tp_time(&ts->vfs_fstatat_getattr_getattr);
+		res = inode->i_op->getattr(path->mnt, path->dentry, stat);
+		stat_tp_timeEnd(&ts->vfs_fstatat_getattr_getattr, res);
+		return res;
+	}
+
+	stat_tp_time(&ts->vfs_fstatat_getattr_fillattr);
+	generic_fillattr(inode, stat);
+	stat_tp_timeEnd(&ts->vfs_fstatat_getattr_fillattr, 0);
+	
 	return 0;
 }
 
 EXPORT_SYMBOL(vfs_getattr_nosec);
+EXPORT_SYMBOL(vfs_getattr_nosec_printk);
 
 int vfs_getattr(struct path *path, struct kstat *stat)
 {
@@ -72,7 +130,20 @@ int vfs_getattr(struct path *path, struct kstat *stat)
 	return vfs_getattr_nosec(path, stat);
 }
 
+
+int vfs_getattr_printk(struct path *path, struct kstat *stat, struct stat_timestamp *ts)
+{
+	int retval;
+	
+	retval = security_inode_getattr(path);
+	
+	if (retval)
+		return retval;
+	return vfs_getattr_nosec_printk(path, stat, ts);
+}
+
 EXPORT_SYMBOL(vfs_getattr);
+EXPORT_SYMBOL(vfs_getattr_printk);
 
 int vfs_fstat(unsigned int fd, struct kstat *stat)
 {
@@ -118,11 +189,57 @@ out:
 }
 EXPORT_SYMBOL(vfs_fstatat);
 
+int vfs_fstatat_printk(int dfd, const char __user *filename, struct kstat *stat,
+		int flag, struct stat_timestamp *ts)
+{
+	struct path path;
+	int error = -EINVAL;
+	unsigned int lookup_flags = 0;
+
+	if ((flag & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |
+		      AT_EMPTY_PATH)) != 0)
+		goto out;
+
+	if (!(flag & AT_SYMLINK_NOFOLLOW))
+		lookup_flags |= LOOKUP_FOLLOW;
+	if (flag & AT_EMPTY_PATH)
+		lookup_flags |= LOOKUP_EMPTY;
+retry:
+	
+	stat_tp_time(&ts->vfs_fstatat_userpath);
+	error = user_path_at_printk(dfd, filename, lookup_flags, &path, ts);
+	stat_tp_timeEnd(&ts->vfs_fstatat_userpath, error);
+	
+	if (error)
+		goto out;
+
+	stat_tp_time(&ts->vfs_fstatat_getattr);
+	error = vfs_getattr_printk(&path, stat, ts);
+	stat_tp_timeEnd(&ts->vfs_fstatat_getattr, error);
+	
+	path_put(&path);
+	if (retry_estale(error, lookup_flags)) {
+		lookup_flags |= LOOKUP_REVAL;
+		goto retry;
+	}
+out:
+	
+	
+	return error;
+}
+EXPORT_SYMBOL(vfs_fstatat_printk);
+
 int vfs_stat(const char __user *name, struct kstat *stat)
 {
 	return vfs_fstatat(AT_FDCWD, name, stat, 0);
 }
 EXPORT_SYMBOL(vfs_stat);
+
+int vfs_stat_printk(const char __user *name, struct kstat *stat, struct stat_timestamp *ts)
+{
+	return vfs_fstatat_printk(AT_FDCWD, name, stat, 0, ts);
+}
+EXPORT_SYMBOL(vfs_stat_printk);
 
 int vfs_lstat(const char __user *name, struct kstat *stat)
 {
@@ -263,6 +380,47 @@ static int cp_new_stat(struct kstat *stat, struct stat __user *statbuf)
 	return copy_to_user(statbuf,&tmp,sizeof(tmp)) ? -EFAULT : 0;
 }
 
+static int cp_new_stat_printk(struct kstat *stat, struct stat __user *statbuf, struct stat_timestamp *ts)
+{
+	struct stat tmp;
+	int res;
+
+	if (!valid_dev(stat->dev) || !valid_dev(stat->rdev))
+		return -EOVERFLOW;
+#if BITS_PER_LONG == 32
+	if (stat->size > MAX_NON_LFS)
+		return -EOVERFLOW;
+#endif
+
+	INIT_STRUCT_STAT_PADDING(tmp);
+	tmp.st_dev = encode_dev(stat->dev);
+	tmp.st_ino = stat->ino;
+	if (sizeof(tmp.st_ino) < sizeof(stat->ino) && tmp.st_ino != stat->ino)
+		return -EOVERFLOW;
+	tmp.st_mode = stat->mode;
+	tmp.st_nlink = stat->nlink;
+	if (tmp.st_nlink != stat->nlink)
+		return -EOVERFLOW;
+	SET_UID(tmp.st_uid, from_kuid_munged(current_user_ns(), stat->uid));
+	SET_GID(tmp.st_gid, from_kgid_munged(current_user_ns(), stat->gid));
+	tmp.st_rdev = encode_dev(stat->rdev);
+	tmp.st_size = stat->size;
+	tmp.st_atime = stat->atime.tv_sec;
+	tmp.st_mtime = stat->mtime.tv_sec;
+	tmp.st_ctime = stat->ctime.tv_sec;
+#ifdef STAT_HAVE_NSEC
+	tmp.st_atime_nsec = stat->atime.tv_nsec;
+	tmp.st_mtime_nsec = stat->mtime.tv_nsec;
+	tmp.st_ctime_nsec = stat->ctime.tv_nsec;
+#endif
+	tmp.st_blocks = stat->blocks;
+	tmp.st_blksize = stat->blksize;
+	
+	res = copy_to_user(statbuf,&tmp,sizeof(tmp)) ? -EFAULT : 0;
+
+	return res;
+}
+
 SYSCALL_DEFINE2(newstat, const char __user *, filename,
 		struct stat __user *, statbuf)
 {
@@ -272,6 +430,33 @@ SYSCALL_DEFINE2(newstat, const char __user *, filename,
 	if (error)
 		return error;
 	return cp_new_stat(&stat, statbuf);
+}
+
+SYSCALL_DEFINE2(newstat_printk, const char __user *, filename,
+		struct stat __user *, statbuf)
+{
+	struct kstat stat;
+	int ret, error;
+
+	struct stat_timestamp ts, *tsp;
+	tsp = &ts;
+	init_timestamp(tsp);
+
+	stat_tp_time(&tsp->vfs_stat);
+	error = vfs_stat_printk(filename, &stat, tsp);
+	stat_tp_timeEnd(&tsp->vfs_stat, error);
+
+	if (error) {
+		printk_timestamp(tsp);
+		return error;
+	}
+	
+	stat_tp_time(&tsp->cp_stat);
+	ret = cp_new_stat_printk(&stat, statbuf, tsp);
+	stat_tp_timeEnd(&tsp->cp_stat, ret);
+	
+	printk_timestamp(tsp);
+	return ret;
 }
 
 SYSCALL_DEFINE2(newlstat, const char __user *, filename,

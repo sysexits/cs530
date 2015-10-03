@@ -6,6 +6,8 @@
 #include <linux/fcntl.h>
 #include <linux/errno.h>
 
+#include <linux/timing.h>
+
 enum { MAX_NESTED_LINKS = 8 };
 
 #define MAXSYMLINKS 40
@@ -45,11 +47,18 @@ enum {LAST_NORM, LAST_ROOT, LAST_DOT, LAST_DOTDOT, LAST_BIND};
 #define LOOKUP_EMPTY		0x4000
 
 extern int user_path_at_empty(int, const char __user *, unsigned, struct path *, int *empty);
+extern int user_path_at_empty_printk(int, const char __user *, unsigned, struct path *, int *empty, struct stat_timestamp *ts);
 
 static inline int user_path_at(int dfd, const char __user *name, unsigned flags,
 		 struct path *path)
 {
 	return user_path_at_empty(dfd, name, flags, path, NULL);
+}
+
+static inline int user_path_at_printk(int dfd, const char __user *name, unsigned flags,
+		 struct path *path, struct stat_timestamp *ts)
+{
+	return user_path_at_empty_printk(dfd, name, flags, path, NULL, ts);
 }
 
 static inline int user_path(const char __user *name, struct path *path)

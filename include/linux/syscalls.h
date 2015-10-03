@@ -406,6 +406,8 @@ asmlinkage long sys_fstat(unsigned int fd,
 			struct __old_kernel_stat __user *statbuf);
 asmlinkage long sys_newstat(const char __user *filename,
 				struct stat __user *statbuf);
+asmlinkage long sys_newstat_printk(const char __user *filename,
+				struct stat __user *statbuf);
 asmlinkage long sys_newlstat(const char __user *filename,
 				struct stat __user *statbuf);
 asmlinkage long sys_newfstat(unsigned int fd, struct stat __user *statbuf);
@@ -510,6 +512,10 @@ asmlinkage long sys_io_cancel(aio_context_t ctx_id, struct iocb __user *iocb,
 asmlinkage long sys_sendfile(int out_fd, int in_fd,
 			     off_t __user *offset, size_t count);
 asmlinkage long sys_sendfile64(int out_fd, int in_fd,
+			       loff_t __user *offset, size_t count);
+asmlinkage long sys_sendfile_printk(int out_fd, int in_fd,
+			     off_t __user *offset, size_t count);
+asmlinkage long sys_sendfile64_printk(int out_fd, int in_fd,
 			       loff_t __user *offset, size_t count);
 asmlinkage long sys_readlink(const char __user *path,
 				char __user *buf, int bufsiz);

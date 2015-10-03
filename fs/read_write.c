@@ -16,10 +16,39 @@
 #include <linux/pagemap.h>
 #include <linux/splice.h>
 #include <linux/compat.h>
+#include <linux/timing.h>
 #include "internal.h"
 
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
+
+// Logging macro
+#define __printk_timestamp(field, ident, format) \
+	if(ts->field.before) printk(KERN_ALERT "cs530\tsendfile\t%s\t" "%" format "\t%llu\n", ident, ts->field.value, ts->field.after - ts->field.before);
+
+static void init_timestamp(struct sendfile_timestamp *ts){
+	ts->in_fdget.before = 0;
+	ts->out_fdget.before = 0;
+	ts->rw_verify_area.before = 0;
+	ts->do_sendfile.before = 0;
+	ts->file_start_write.before = 0;
+	ts->dsd_rw_verify_area.before = 0;
+	ts->dsd_splice_direct_to_actor.before = 0;
+	ts->do_splice_direct.before = 0;
+	ts->file_end_write.before = 0;
+}
+
+static void printk_timestamp(struct sendfile_timestamp *ts){
+	__printk_timestamp(in_fdget, "do_sendfile fdget(in)", "d");
+	__printk_timestamp(rw_verify_area, "do_sendfile rw_verify_area", "d");
+	__printk_timestamp(out_fdget, "do_sendfile fdget(out)", "d");
+	__printk_timestamp(file_start_write, "do_sendfile file_start_write", "d");
+	__printk_timestamp(dsd_rw_verify_area, "do_sendfile do_splice_direct rw_verify_area", "d");
+	__printk_timestamp(dsd_splice_direct_to_actor, "do_sendfile do_splice_direct splice_direct_to_actor", "d");
+	__printk_timestamp(do_splice_direct, "do_sendfile do_splice_direct", "ld");
+	__printk_timestamp(file_end_write, "do_sendfile file_end_write", "d");
+	__printk_timestamp(do_sendfile, "do_sendfile", "ld");
+}
 
 typedef ssize_t (*io_fn_t)(struct file *, char __user *, size_t, loff_t *);
 typedef ssize_t (*iter_fn_t)(struct kiocb *, struct iov_iter *);
@@ -1252,6 +1281,136 @@ out:
 	return retval;
 }
 
+/*
+ *	do_sendfile_printk: do_sendfile with printk
+ *	
+ *	do_sendfile_printk has printk logging functionality performing same code do_sendfile
+ *	@out_fd: file descriptor of output
+ *	@in_fd: file descriptor of input
+ *	@ppos: offset from starting to read data from in_fd
+ *	@count: the number of bytes to copy between the file descriptors
+ *	@max: maximum offset to read
+ */
+static ssize_t do_sendfile_printk(int out_fd, int in_fd, loff_t *ppos,
+		  	   size_t count, loff_t max, struct sendfile_timestamp *ts)
+{
+	struct fd in, out;
+	struct inode *in_inode, *out_inode;
+	loff_t pos;
+	loff_t out_pos;
+	ssize_t retval;
+	int fl;
+
+	/*
+	 * Get input file, and verify that it is ok..
+	 */
+	retval = -EBADF;
+	sendfile_tp_time(&ts->in_fdget);
+	in = fdget(in_fd); // int to struct fd
+	sendfile_tp_timeEnd(&ts->in_fdget, 1);
+
+	if (!in.file)
+		goto out; // return bad file number
+	if (!(in.file->f_mode & FMODE_READ))
+		goto fput_in;
+	retval = -ESPIPE;
+	if (!ppos) {
+		pos = in.file->f_pos; // if ppos is null, pos is pos of source file.
+	} else {
+		pos = *ppos;
+		if (!(in.file->f_mode & FMODE_PREAD))
+			goto fput_in;
+	}
+
+	sendfile_tp_time(&ts->rw_verify_area);
+	retval = rw_verify_area(READ, in.file, &pos, count);
+	sendfile_tp_timeEnd(&ts->rw_verify_area, retval);
+		
+	if (retval < 0)
+		goto fput_in;
+	count = retval;
+
+	/*
+	 * Get output file, and verify that it is ok..
+	 */
+	retval = -EBADF;
+	sendfile_tp_time(&ts->out_fdget);
+	out = fdget(out_fd);
+	sendfile_tp_timeEnd(&ts->out_fdget, 1);
+	
+	if (!out.file)
+		goto fput_in;
+	if (!(out.file->f_mode & FMODE_WRITE))
+		goto fput_out;
+	retval = -EINVAL;
+	// get inode from each fd.file
+	in_inode = file_inode(in.file);
+	out_inode = file_inode(out.file);
+	out_pos = out.file->f_pos;
+	retval = rw_verify_area(WRITE, out.file, &out_pos, count);
+	if (retval < 0)
+		goto fput_out;
+	count = retval;
+
+	if (!max)
+		max = min(in_inode->i_sb->s_maxbytes, out_inode->i_sb->s_maxbytes);
+
+	if (unlikely(pos + count > max)) {
+		retval = -EOVERFLOW;
+		if (pos >= max)
+			goto fput_out;
+		count = max - pos;
+	}
+
+	fl = 0;
+#if 0
+	/*
+	 * We need to debate whether we can enable this or not. The
+	 * man page documents EAGAIN return for the output at least,
+	 * and the application is arguably buggy if it doesn't expect
+	 * EAGAIN on a non-blocking file descriptor.
+	 */
+	if (in.file->f_flags & O_NONBLOCK)
+		fl = SPLICE_F_NONBLOCK;
+#endif
+	sendfile_tp_time(&ts->file_start_write);
+	file_start_write(out.file);
+	sendfile_tp_timeEnd(&ts->file_start_write, 0);
+
+	sendfile_tp_time(&ts->do_splice_direct);
+	retval = do_splice_direct_printk(in.file, &pos, out.file, &out_pos, count, fl, ts);
+	sendfile_tp_timeEnd(&ts->do_splice_direct, retval);
+
+	sendfile_tp_time(&ts->file_end_write);
+	file_end_write(out.file);
+	sendfile_tp_timeEnd(&ts->file_end_write, 0);
+
+	if (retval > 0) {
+		add_rchar(current, retval);
+		add_wchar(current, retval);
+		fsnotify_access(in.file);
+		fsnotify_modify(out.file);
+		out.file->f_pos = out_pos;
+		if (ppos)
+			*ppos = pos;
+		else
+			in.file->f_pos = pos;
+	}
+
+	inc_syscr(current);
+	inc_syscw(current);
+	if (pos > max)
+		retval = -EOVERFLOW;
+
+fput_out:
+	fdput(out);
+fput_in:
+	fdput(in);
+out:
+	return retval;
+}
+
+
 SYSCALL_DEFINE4(sendfile, int, out_fd, int, in_fd, off_t __user *, offset, size_t, count)
 {
 	loff_t pos;
@@ -1286,6 +1445,54 @@ SYSCALL_DEFINE4(sendfile64, int, out_fd, int, in_fd, loff_t __user *, offset, si
 	}
 
 	return do_sendfile(out_fd, in_fd, NULL, count, 0);
+}
+
+SYSCALL_DEFINE4(sendfile_printk, int, out_fd, int, in_fd, off_t __user *, offset, size_t, count)
+{
+	loff_t pos;
+	off_t off;
+	ssize_t ret;
+
+	if (offset) {
+		if (unlikely(get_user(off, offset)))
+			return -EFAULT;
+		pos = off;
+		ret = do_sendfile(out_fd, in_fd, &pos, count, MAX_NON_LFS);
+		if (unlikely(put_user(pos, offset)))
+			return -EFAULT;
+		return ret;
+	}
+
+	return do_sendfile(out_fd, in_fd, NULL, count, 0);
+}
+
+SYSCALL_DEFINE4(sendfile64_printk, int, out_fd, int, in_fd, loff_t __user *, offset, size_t, count)
+{
+	loff_t pos;
+	ssize_t ret;
+
+	struct sendfile_timestamp ts, *tsp;
+	tsp = &ts;
+	init_timestamp(tsp);
+	
+	if (offset) {
+		sendfile_tp_time(&tsp->do_sendfile);
+		if (unlikely(copy_from_user(&pos, offset, sizeof(loff_t))))
+			return -EFAULT;
+		ret = do_sendfile_printk(out_fd, in_fd, &pos, count, 0, tsp);
+		if (unlikely(put_user(pos, offset))) {
+			return -EFAULT;
+		}
+		sendfile_tp_timeEnd(&tsp->do_sendfile, ret);
+		printk_timestamp(tsp);
+		return ret;
+	}
+
+	sendfile_tp_time(&tsp->do_sendfile);
+	ret = do_sendfile_printk(out_fd, in_fd, NULL, count, 0, tsp);
+	sendfile_tp_timeEnd(&tsp->do_sendfile, ret);
+	printk_timestamp(tsp);
+	return ret;
 }
 
 #ifdef CONFIG_COMPAT
@@ -1326,4 +1533,44 @@ COMPAT_SYSCALL_DEFINE4(sendfile64, int, out_fd, int, in_fd,
 
 	return do_sendfile(out_fd, in_fd, NULL, count, 0);
 }
+
+COMPAT_SYSCALL_DEFINE4(sendfile_printk, int, out_fd, int, in_fd,
+		compat_off_t __user *, offset, compat_size_t, count)
+{
+	loff_t pos;
+	off_t off;
+	ssize_t ret;
+
+	if (offset) {
+		if (unlikely(get_user(off, offset)))
+			return -EFAULT;
+		pos = off;
+		ret = do_sendfile(out_fd, in_fd, &pos, count, MAX_NON_LFS);
+		if (unlikely(put_user(pos, offset)))
+			return -EFAULT;
+		return ret;
+	}
+
+	return do_sendfile(out_fd, in_fd, NULL, count, 0);
+}
+
+COMPAT_SYSCALL_DEFINE4(sendfile64_printk, int, out_fd, int, in_fd,
+		compat_loff_t __user *, offset, compat_size_t, count)
+{
+	loff_t pos;
+	ssize_t ret;
+
+	if (offset) {
+		if (unlikely(copy_from_user(&pos, offset, sizeof(loff_t))))
+			return -EFAULT;
+		ret = do_sendfile_printk(out_fd, in_fd, &pos, count, 0, NULL);
+		if (unlikely(put_user(pos, offset)))
+			return -EFAULT;
+		return ret;
+	}
+
+	return do_sendfile_printk(out_fd, in_fd, NULL, count, 0, NULL);
+}
+
+
 #endif

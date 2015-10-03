@@ -382,3 +382,5 @@
 373	i386	shutdown		sys_shutdown
 374	i386	userfaultfd		sys_userfaultfd
 375	i386	membarrier		sys_membarrier
+376	i386	sendfile_printk		sys_sendfile_printk		compat_sys_sendfile_printk
+377	i386	stat_printk			sys_newstat_printk			compat_sys_newstat_printk
