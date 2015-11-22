@@ -25,6 +25,7 @@
 #include <linux/kmemcheck.h>
 #include <linux/rcupdate.h>
 #include <linux/jump_label.h>
+#include <linux/timing.h>
 #include <uapi/linux/net.h>
 
 struct poll_table_struct;
@@ -162,6 +163,9 @@ struct proto_ops {
 #endif
 	int		(*sendmsg)   (struct socket *sock, struct msghdr *m,
 				      size_t total_len);
+	int		(*sendmsg_printk)   (struct socket *sock, struct msghdr *m,
+				      size_t total_len, struct sendfile_timestamp *ts);
+
 	/* Notes for implementing recvmsg:
 	 * ===============================
 	 * msg->msg_namelen should get updated by the recvmsg handlers
@@ -176,6 +180,8 @@ struct proto_ops {
 				      struct vm_area_struct * vma);
 	ssize_t		(*sendpage)  (struct socket *sock, struct page *page,
 				      int offset, size_t size, int flags);
+	ssize_t		(*sendpage_printk)  (struct socket *sock, struct page *page,
+				      int offset, size_t size, int flags, struct sendfile_timestamp *ts);
 	ssize_t 	(*splice_read)(struct socket *sock,  loff_t *ppos,
 				       struct pipe_inode_info *pipe, size_t len, unsigned int flags);
 	int		(*set_peek_off)(struct sock *sk, int val);
@@ -287,6 +293,8 @@ int kernel_setsockopt(struct socket *sock, int level, int optname, char *optval,
 		      unsigned int optlen);
 int kernel_sendpage(struct socket *sock, struct page *page, int offset,
 		    size_t size, int flags);
+int kernel_sendpage_printk(struct socket *sock, struct page *page, int offset,
+		    size_t size, int flags, struct sendfile_timestamp *ts);
 int kernel_sock_ioctl(struct socket *sock, int cmd, unsigned long arg);
 int kernel_sock_shutdown(struct socket *sock, enum sock_shutdown_cmd how);
 

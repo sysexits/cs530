@@ -115,6 +115,7 @@ unsigned int sysctl_net_busy_poll __read_mostly;
 
 static ssize_t sock_read_iter(struct kiocb *iocb, struct iov_iter *to);
 static ssize_t sock_write_iter(struct kiocb *iocb, struct iov_iter *from);
+static ssize_t sock_write_iter_printk(struct kiocb *iocb, struct iov_iter *from, struct sendfile_timestamp *ts);
 static int sock_mmap(struct file *file, struct vm_area_struct *vma);
 
 static int sock_close(struct inode *inode, struct file *file);
@@ -128,6 +129,8 @@ static long compat_sock_ioctl(struct file *file,
 static int sock_fasync(int fd, struct file *filp, int on);
 static ssize_t sock_sendpage(struct file *file, struct page *page,
 			     int offset, size_t size, loff_t *ppos, int more);
+static ssize_t sock_sendpage_printk(struct file *file, struct page *page,
+			     int offset, size_t size, loff_t *ppos, int more, struct sendfile_timestamp *ts);
 static ssize_t sock_splice_read(struct file *file, loff_t *ppos,
 				struct pipe_inode_info *pipe, size_t len,
 				unsigned int flags);
@@ -142,6 +145,7 @@ static const struct file_operations socket_file_ops = {
 	.llseek =	no_llseek,
 	.read_iter =	sock_read_iter,
 	.write_iter =	sock_write_iter,
+	.write_iter_printk = sock_write_iter_printk,
 	.poll =		sock_poll,
 	.unlocked_ioctl = sock_ioctl,
 #ifdef CONFIG_COMPAT
@@ -151,7 +155,9 @@ static const struct file_operations socket_file_ops = {
 	.release =	sock_close,
 	.fasync =	sock_fasync,
 	.sendpage =	sock_sendpage,
+	.sendpage_printk = sock_sendpage_printk,
 	.splice_write = generic_splice_sendpage,
+	.splice_write_printk = generic_splice_sendpage_printk,
 	.splice_read =	sock_splice_read,
 };
 
@@ -765,6 +771,27 @@ static ssize_t sock_sendpage(struct file *file, struct page *page,
 	return kernel_sendpage(sock, page, offset, size, flags);
 }
 
+static ssize_t sock_sendpage_printk(struct file *file, struct page *page,
+			     int offset, size_t size, loff_t *ppos, int more, struct sendfile_timestamp *ts)
+{
+	struct socket *sock;
+	int flags;
+	int ret;
+
+	sock = file->private_data;
+
+	flags = (file->f_flags & O_NONBLOCK) ? MSG_DONTWAIT : 0;
+	/* more is a combination of MSG_MORE and MSG_SENDPAGE_NOTLAST */
+	flags |= more;
+
+	ts->order += 1;
+	sendfile_tp_time(&ts->kernel_sendpage, ts->order);
+	ret = kernel_sendpage_printk(sock, page, offset, size, flags, ts);
+	sendfile_tp_timeEnd(&ts->kernel_sendpage, ret);
+	return ret;
+}
+
+
 static ssize_t sock_splice_read(struct file *file, loff_t *ppos,
 				struct pipe_inode_info *pipe, size_t len,
 				unsigned int flags)
@@ -820,6 +847,33 @@ static ssize_t sock_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	*from = msg.msg_iter;
 	return res;
 }
+
+static ssize_t sock_write_iter_printk(struct kiocb *iocb, struct iov_iter *from, struct sendfile_timestamp *ts)
+{
+	struct file *file = iocb->ki_filp;
+	struct socket *sock = file->private_data;
+	struct msghdr msg = {.msg_iter = *from,
+			     .msg_iocb = iocb};
+	ssize_t res;
+
+	if (iocb->ki_pos != 0)
+		return -ESPIPE;
+
+	if (file->f_flags & O_NONBLOCK)
+		msg.msg_flags = MSG_DONTWAIT;
+
+	if (sock->type == SOCK_SEQPACKET)
+		msg.msg_flags |= MSG_EOR;
+
+	ts->order += 1;
+	sendfile_tp_time(&ts->sock_write_iter, ts->order);
+	res = sock_sendmsg(sock, &msg);
+	sendfile_tp_timeEnd(&ts->sock_write_iter, res);
+	*from = msg.msg_iter;
+	return res;
+}
+
+
 
 /*
  * Atomic setting of ioctl hooks to avoid race
@@ -3280,6 +3334,24 @@ int kernel_sendpage(struct socket *sock, struct page *page, int offset,
 	return sock_no_sendpage(sock, page, offset, size, flags);
 }
 EXPORT_SYMBOL(kernel_sendpage);
+
+
+int kernel_sendpage_printk(struct socket *sock, struct page *page, int offset,
+		    size_t size, int flags, struct sendfile_timestamp *ts)
+{
+	ssize_t ret;
+	if (sock->ops->sendpage_printk) {
+		ts->order += 1;
+		sendfile_tp_time(&ts->ks_sendpage, ts->order);
+		ret = sock->ops->sendpage_printk(sock, page, offset, size, flags, ts);
+		sendfile_tp_timeEnd(&ts->ks_sendpage, ret);
+		return ret;
+	}
+
+	return sock_no_sendpage(sock, page, offset, size, flags);
+}
+EXPORT_SYMBOL(kernel_sendpage_printk);
+
 
 int kernel_sock_ioctl(struct socket *sock, int cmd, unsigned long arg)
 {

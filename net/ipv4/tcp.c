@@ -281,6 +281,8 @@
 #include <asm/ioctls.h>
 #include <net/busy_poll.h>
 
+#include <linux/timing.h>
+
 int sysctl_tcp_fin_timeout __read_mostly = TCP_FIN_TIMEOUT;
 
 int sysctl_tcp_min_tso_segs __read_mostly = 2;
@@ -1025,6 +1027,25 @@ int tcp_sendpage(struct sock *sk, struct page *page, int offset,
 	return res;
 }
 EXPORT_SYMBOL(tcp_sendpage);
+
+int tcp_sendpage_printk(struct sock *sk, struct page *page, int offset,
+		 size_t size, int flags, struct sendfile_timestamp *ts)
+{
+	ssize_t res;
+
+	if (!(sk->sk_route_caps & NETIF_F_SG) ||
+	    !(sk->sk_route_caps & NETIF_F_ALL_CSUM))
+		return sock_no_sendpage(sk->sk_socket, page, offset, size,
+					flags);
+
+	lock_sock(sk);
+	res = do_tcp_sendpages(sk, page, offset, size, flags);
+	release_sock(sk);
+	return res;
+}
+EXPORT_SYMBOL(tcp_sendpage_printk);
+
+
 
 static inline int select_size(const struct sock *sk, bool sg)
 {

@@ -24,6 +24,8 @@ int inet_accept(struct socket *sock, struct socket *newsock, int flags);
 int inet_sendmsg(struct socket *sock, struct msghdr *msg, size_t size);
 ssize_t inet_sendpage(struct socket *sock, struct page *page, int offset,
 		      size_t size, int flags);
+ssize_t inet_sendpage_printk(struct socket *sock, struct page *page, int offset,
+		      size_t size, int flags, struct sendfile_timestamp *ts);
 int inet_recvmsg(struct socket *sock, struct msghdr *msg, size_t size,
 		 int flags);
 int inet_shutdown(struct socket *sock, int how);

@@ -24,27 +24,98 @@
 
 // Logging macro
 #define __printk_timestamp(field, ident, format) \
-	if(ts->field.before) printk(KERN_ALERT "cs530\tsendfile\t%s\t" "%" format "\t%llu\n", ident, ts->field.value, ts->field.after - ts->field.before);
+	if(ts->field.diff) printk(KERN_ALERT "cs530\tsendfile\t%s\t value \t" "%" format "\t clock \t %lld \t order \t %d\n", ident, ts->field.value, ts->field.diff, ts->field.order);
 
 static void init_timestamp(struct sendfile_timestamp *ts){
 	ts->in_fdget.before = 0;
 	ts->out_fdget.before = 0;
-	ts->rw_verify_area.before = 0;
+	ts->in_rw_verify_area.before = 0;
+	ts->out_rw_verify_area.before = 0;
 	ts->do_sendfile.before = 0;
 	ts->file_start_write.before = 0;
 	ts->dsd_rw_verify_area.before = 0;
 	ts->dsd_splice_direct_to_actor.before = 0;
+	ts->dsd_sdta_do_splice_to.before = 0;
+	ts->dsd_sdta_do_splice_from.before = 0;
+	ts->dsd_sdta_dsf_splice_from_pipe.before = 0;
+	ts->dsd_sdta_dsf_sfp_spinlock.before = 0;
+	ts->dsd_sdta_dsf_sfp_internal.before = 0;
+	ts->dsd_sdta_dsf_sfp_write_pipe_buf_spinlock.before = 0;
+	ts->dsd_sdta_dsf_sfp_write_pipe_buf_internal.before = 0;
+	ts->dsd_sdta_dsf_sfp_kernel_write.before = 0;
+	ts->dsd_sdta_dsf_sfp_kw_write.before = 0;
+	ts->dsd_sdta_dsf_sfp_kw_new_sync_write.before = 0;
+	ts->dsd_sdta_dsf_sfp_kw_nsw_write_iter.before = 0;
+	ts->vfs_iter_write.before = 0;
+	ts->write_iter.before = 0;
 	ts->do_splice_direct.before = 0;
 	ts->file_end_write.before = 0;
+	ts->splice_from_pipe.before = 0;
+	ts->generic_file_write_iter.before = 0;
+	ts->sock_write_iter.before = 0;
+	ts->kernel_sendpage.before = 0;
+	ts->sendpage.before = 0;
+	ts->ks_sendpage.before = 0;
+
+	ts->in_fdget.diff = 0;
+	ts->out_fdget.diff = 0;
+	ts->in_rw_verify_area.diff = 0;
+	ts->out_rw_verify_area.diff = 0;
+	ts->do_sendfile.diff = 0;
+	ts->file_start_write.diff = 0;
+	ts->dsd_rw_verify_area.diff = 0;
+	ts->dsd_splice_direct_to_actor.diff = 0;
+	ts->dsd_sdta_do_splice_to.diff = 0;
+	ts->dsd_sdta_do_splice_from.diff = 0;
+	ts->dsd_sdta_dsf_splice_from_pipe.diff = 0;
+	ts->dsd_sdta_dsf_sfp_spinlock.diff = 0;
+	ts->dsd_sdta_dsf_sfp_internal.diff = 0;
+	ts->dsd_sdta_dsf_sfp_write_pipe_buf_spinlock.diff = 0;
+	ts->dsd_sdta_dsf_sfp_write_pipe_buf_internal.diff = 0;
+	ts->dsd_sdta_dsf_sfp_kernel_write.diff = 0;
+	ts->dsd_sdta_dsf_sfp_kw_write.diff = 0;
+	ts->dsd_sdta_dsf_sfp_kw_new_sync_write.diff = 0;
+	ts->dsd_sdta_dsf_sfp_kw_nsw_write_iter.diff = 0;
+	ts->vfs_iter_write.diff = 0;
+	ts->write_iter.diff = 0;
+	ts->do_splice_direct.diff = 0;
+	ts->file_end_write.diff = 0;
+	ts->splice_from_pipe.diff = 0;
+	ts->generic_file_write_iter.diff = 0;
+	ts->sock_write_iter.diff = 0;
+	ts->kernel_sendpage.diff = 0;
+	ts->sendpage.diff = 0;
+	ts->ks_sendpage.diff = 0;
+	
+	ts->order = 0;
 }
 
 static void printk_timestamp(struct sendfile_timestamp *ts){
 	__printk_timestamp(in_fdget, "do_sendfile fdget(in)", "d");
-	__printk_timestamp(rw_verify_area, "do_sendfile rw_verify_area", "d");
+	__printk_timestamp(in_rw_verify_area, "do_sendfile in_rw_verify_area", "d");
 	__printk_timestamp(out_fdget, "do_sendfile fdget(out)", "d");
+	__printk_timestamp(out_rw_verify_area, "do_sendfile out_rw_verify_area", "d");
 	__printk_timestamp(file_start_write, "do_sendfile file_start_write", "d");
 	__printk_timestamp(dsd_rw_verify_area, "do_sendfile do_splice_direct rw_verify_area", "d");
 	__printk_timestamp(dsd_splice_direct_to_actor, "do_sendfile do_splice_direct splice_direct_to_actor", "d");
+	__printk_timestamp(dsd_sdta_do_splice_to, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_to", "ld");
+	__printk_timestamp(dsd_sdta_do_splice_from, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_from", "ld");
+	__printk_timestamp(dsd_sdta_dsf_splice_from_pipe, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_from splice_from_pipe", "ld");
+	__printk_timestamp(dsd_sdta_dsf_sfp_spinlock, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_from splice_from_pipe spinlock", "ld");
+	__printk_timestamp(dsd_sdta_dsf_sfp_internal, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_from splice_from_pipe internal", "ld");
+	__printk_timestamp(dsd_sdta_dsf_sfp_write_pipe_buf_internal, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_from splice_from_pipe write_pipe_buf internal", "ld");
+	__printk_timestamp(dsd_sdta_dsf_sfp_kernel_write, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_from splice_from_pipe write_pipe_buf kernel_write", "ld");
+	__printk_timestamp(dsd_sdta_dsf_sfp_kw_write, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_from splice_from_pipe write_pipe_buf kernel_write write", "ld");
+	__printk_timestamp(dsd_sdta_dsf_sfp_kw_new_sync_write, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_from splice_from_pipe write_pipe_buf kernel_write new_sync_write", "ld");
+	__printk_timestamp(dsd_sdta_dsf_sfp_kw_nsw_write_iter, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_from splice_from_pipe write_pipe_buf kernel_write new_sync_write write_iter", "ld");
+	__printk_timestamp(vfs_iter_write, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_from ext4 iter_file_splice_write vfs_write_iter", "ld");
+	__printk_timestamp(write_iter, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_from ext4 iter_file_splice_write vfs_write_iter write_iter", "ld");
+	__printk_timestamp(generic_file_write_iter, "do_sendfile do_splice_direct splice_direct_to_actor do_splice_from ext4 iter_file_splice_write vfs_write_iter write_iter __generic_file_write_iter", "ld");
+	__printk_timestamp(sock_write_iter, "do_sendfile severalsteps sock_write_iter", "d");
+	__printk_timestamp(kernel_sendpage, "do_sendfile severalsteps splice_from_pipe pipe_to_sendpage kernel_sendpage", "d");
+	__printk_timestamp(ks_sendpage, "do_sendfile severalsteps splice_from_pipe pipe_to_sendpage kernel_sendpage sendpage", "d");
+	__printk_timestamp(splice_from_pipe, "do_sendfile severalsteps splice_from_pipe", "d");
+	__printk_timestamp(sendpage, "do_sendfile severalsteps splice_from_pipe pipe_to_sendpage", "d");
 	__printk_timestamp(do_splice_direct, "do_sendfile do_splice_direct", "ld");
 	__printk_timestamp(file_end_write, "do_sendfile file_end_write", "d");
 	__printk_timestamp(do_sendfile, "do_sendfile", "ld");
@@ -398,6 +469,30 @@ ssize_t vfs_iter_write(struct file *file, struct iov_iter *iter, loff_t *ppos)
 }
 EXPORT_SYMBOL(vfs_iter_write);
 
+ssize_t vfs_iter_write_printk(struct file *file, struct iov_iter *iter, loff_t *ppos, struct sendfile_timestamp *ts)
+{
+	struct kiocb kiocb;
+	ssize_t ret;
+
+	if (!file->f_op->write_iter)
+		return -EINVAL;
+
+	init_sync_kiocb(&kiocb, file);
+	kiocb.ki_pos = *ppos;
+
+	iter->type |= WRITE;
+	sendfile_tp_time(&ts->write_iter, ts->order);
+	ret = file->f_op->write_iter_printk(&kiocb, iter, ts);
+	sendfile_tp_timeEnd(&ts->write_iter, ret);
+	BUG_ON(ret == -EIOCBQUEUED);
+	if (ret > 0)
+		*ppos = kiocb.ki_pos;
+	return ret;
+}
+EXPORT_SYMBOL(vfs_iter_write_printk);
+
+
+
 /*
  * rw_verify_area doesn't like huge counts. We limit
  * them to something that fits in "int" so that others
@@ -511,6 +606,27 @@ static ssize_t new_sync_write(struct file *filp, const char __user *buf, size_t 
 	return ret;
 }
 
+static ssize_t new_sync_write_printk(struct file *filp, const char __user *buf, size_t len, loff_t *ppos, struct sendfile_timestamp *ts)
+{
+	struct iovec iov = { .iov_base = (void __user *)buf, .iov_len = len };
+	struct kiocb kiocb;
+	struct iov_iter iter;
+	ssize_t ret;
+
+	init_sync_kiocb(&kiocb, filp);
+	kiocb.ki_pos = *ppos;
+	iov_iter_init(&iter, WRITE, &iov, 1, len);
+
+	ts->order += 1;
+	sendfile_tp_time(&ts->dsd_sdta_dsf_sfp_kw_nsw_write_iter, ts->order);
+	ret = filp->f_op->write_iter_printk(&kiocb, &iter, ts);
+	sendfile_tp_timeEnd(&ts->dsd_sdta_dsf_sfp_kw_nsw_write_iter, ret);
+	BUG_ON(ret == -EIOCBQUEUED);
+	if (ret > 0)
+		*ppos = kiocb.ki_pos;
+	return ret;
+}
+
 ssize_t __vfs_write(struct file *file, const char __user *p, size_t count,
 		    loff_t *pos)
 {
@@ -522,6 +638,30 @@ ssize_t __vfs_write(struct file *file, const char __user *p, size_t count,
 		return -EINVAL;
 }
 EXPORT_SYMBOL(__vfs_write);
+
+ssize_t __vfs_write_printk(struct file *file, const char __user *p, size_t count,
+		    loff_t *pos, struct sendfile_timestamp *ts)
+{
+	ssize_t ret;
+	if (file->f_op->write) {
+		ret = file->f_op->write(file, p, count, pos);
+		return ret; 
+	}
+	else if (file->f_op->write_iter_printk) {
+		ts->order += 1;
+		sendfile_tp_time(&ts->dsd_sdta_dsf_sfp_kw_new_sync_write, ts->order);
+		ret = new_sync_write_printk(file, p, count, pos, ts);
+		sendfile_tp_timeEnd(&ts->dsd_sdta_dsf_sfp_kw_new_sync_write, ret);
+		return ret;
+	}
+	else if (file->f_op->write_iter) {
+		ret = new_sync_write(file, p, count, pos);
+		return ret;
+	}
+	else
+		return -EINVAL;
+}
+EXPORT_SYMBOL(__vfs_write_printk);
 
 ssize_t __kernel_write(struct file *file, const char *buf, size_t count, loff_t *pos)
 {
@@ -548,6 +688,32 @@ ssize_t __kernel_write(struct file *file, const char *buf, size_t count, loff_t 
 }
 
 EXPORT_SYMBOL(__kernel_write);
+
+ssize_t __kernel_write_printk(struct file *file, const char *buf, size_t count, loff_t *pos, struct sendfile_timestamp *ts)
+{
+	mm_segment_t old_fs;
+	const char __user *p;
+	ssize_t ret;
+
+	if (!(file->f_mode & FMODE_CAN_WRITE))
+		return -EINVAL;
+
+	old_fs = get_fs();
+	set_fs(get_ds());
+	p = (__force const char __user *)buf;
+	if (count > MAX_RW_COUNT)
+		count =  MAX_RW_COUNT;
+	ret = __vfs_write_printk(file, p, count, pos, ts);
+	set_fs(old_fs);
+	if (ret > 0) {
+		fsnotify_modify(file);
+		add_wchar(current, ret);
+	}
+	inc_syscw(current);
+	return ret;
+}
+
+EXPORT_SYMBOL(__kernel_write_printk);
 
 ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
@@ -1305,9 +1471,11 @@ static ssize_t do_sendfile_printk(int out_fd, int in_fd, loff_t *ppos,
 	 * Get input file, and verify that it is ok..
 	 */
 	retval = -EBADF;
-	sendfile_tp_time(&ts->in_fdget);
+	ts->order += 1;
+	sendfile_tp_time(&ts->in_fdget, ts->order);
 	in = fdget(in_fd); // int to struct fd
 	sendfile_tp_timeEnd(&ts->in_fdget, 1);
+	sendfile_tp_hwPerf(&ts->in_fdget);
 
 	if (!in.file)
 		goto out; // return bad file number
@@ -1322,9 +1490,11 @@ static ssize_t do_sendfile_printk(int out_fd, int in_fd, loff_t *ppos,
 			goto fput_in;
 	}
 
-	sendfile_tp_time(&ts->rw_verify_area);
+	ts->order += 1;
+	sendfile_tp_time(&ts->in_rw_verify_area, ts->order);
 	retval = rw_verify_area(READ, in.file, &pos, count);
-	sendfile_tp_timeEnd(&ts->rw_verify_area, retval);
+	sendfile_tp_timeEnd(&ts->in_rw_verify_area, retval);
+	sendfile_tp_hwPerf(&ts->in_rw_verify_area);
 		
 	if (retval < 0)
 		goto fput_in;
@@ -1334,9 +1504,11 @@ static ssize_t do_sendfile_printk(int out_fd, int in_fd, loff_t *ppos,
 	 * Get output file, and verify that it is ok..
 	 */
 	retval = -EBADF;
-	sendfile_tp_time(&ts->out_fdget);
+	ts->order += 1;
+	sendfile_tp_time(&ts->out_fdget, ts->order);
 	out = fdget(out_fd);
 	sendfile_tp_timeEnd(&ts->out_fdget, 1);
+	sendfile_tp_hwPerf(&ts->out_fdget);
 	
 	if (!out.file)
 		goto fput_in;
@@ -1347,7 +1519,11 @@ static ssize_t do_sendfile_printk(int out_fd, int in_fd, loff_t *ppos,
 	in_inode = file_inode(in.file);
 	out_inode = file_inode(out.file);
 	out_pos = out.file->f_pos;
+	ts->order += 1;
+	sendfile_tp_time(&ts->out_rw_verify_area, ts->order);
 	retval = rw_verify_area(WRITE, out.file, &out_pos, count);
+	sendfile_tp_timeEnd(&ts->out_rw_verify_area, retval);
+	sendfile_tp_hwPerf(&ts->out_rw_verify_area);
 	if (retval < 0)
 		goto fput_out;
 	count = retval;
@@ -1373,17 +1549,23 @@ static ssize_t do_sendfile_printk(int out_fd, int in_fd, loff_t *ppos,
 	if (in.file->f_flags & O_NONBLOCK)
 		fl = SPLICE_F_NONBLOCK;
 #endif
-	sendfile_tp_time(&ts->file_start_write);
+	ts->order += 1;
+	sendfile_tp_time(&ts->file_start_write, ts->order);
 	file_start_write(out.file);
 	sendfile_tp_timeEnd(&ts->file_start_write, 0);
+	sendfile_tp_hwPerf(&ts->file_start_write);
 
-	sendfile_tp_time(&ts->do_splice_direct);
+	ts->order += 1;
+	sendfile_tp_time(&ts->do_splice_direct, ts->order);
 	retval = do_splice_direct_printk(in.file, &pos, out.file, &out_pos, count, fl, ts);
 	sendfile_tp_timeEnd(&ts->do_splice_direct, retval);
+	sendfile_tp_hwPerf(&ts->do_splice_direct);
 
-	sendfile_tp_time(&ts->file_end_write);
+	ts->order += 1;
+	sendfile_tp_time(&ts->file_end_write, ts->order);
 	file_end_write(out.file);
 	sendfile_tp_timeEnd(&ts->file_end_write, 0);
+	sendfile_tp_hwPerf(&ts->file_end_write);
 
 	if (retval > 0) {
 		add_rchar(current, retval);
@@ -1476,7 +1658,8 @@ SYSCALL_DEFINE4(sendfile64_printk, int, out_fd, int, in_fd, loff_t __user *, off
 	init_timestamp(tsp);
 	
 	if (offset) {
-		sendfile_tp_time(&tsp->do_sendfile);
+		tsp->order += 1;
+		sendfile_tp_time(&tsp->do_sendfile, tsp->order);
 		if (unlikely(copy_from_user(&pos, offset, sizeof(loff_t))))
 			return -EFAULT;
 		ret = do_sendfile_printk(out_fd, in_fd, &pos, count, 0, tsp);
@@ -1488,7 +1671,8 @@ SYSCALL_DEFINE4(sendfile64_printk, int, out_fd, int, in_fd, loff_t __user *, off
 		return ret;
 	}
 
-	sendfile_tp_time(&tsp->do_sendfile);
+	tsp->order += 1;
+	sendfile_tp_time(&tsp->do_sendfile, tsp->order);
 	ret = do_sendfile_printk(out_fd, in_fd, NULL, count, 0, tsp);
 	sendfile_tp_timeEnd(&tsp->do_sendfile, ret);
 	printk_timestamp(tsp);

@@ -9,6 +9,7 @@
 #define SPLICE_H
 
 #include <linux/pipe_fs_i.h>
+#include <linux/timing.h>
 
 /*
  * Flags passed in from splice/tee/vmsplice
@@ -62,18 +63,30 @@ struct splice_pipe_desc {
 
 typedef int (splice_actor)(struct pipe_inode_info *, struct pipe_buffer *,
 			   struct splice_desc *);
+typedef int (splice_actor_printk)(struct pipe_inode_info *, struct pipe_buffer *,
+			   struct splice_desc *, struct sendfile_timestamp *);
 typedef int (splice_direct_actor)(struct pipe_inode_info *,
 				  struct splice_desc *);
+typedef int (splice_direct_actor_printk)(struct pipe_inode_info *,
+				  struct splice_desc *,
+				  struct sendfile_timestamp *);
 
 extern ssize_t splice_from_pipe(struct pipe_inode_info *, struct file *,
 				loff_t *, size_t, unsigned int,
 				splice_actor *);
+extern ssize_t splice_from_pipe_printk(struct pipe_inode_info *, struct file *,
+				loff_t *, size_t, unsigned int,
+				splice_actor_printk *, struct sendfile_timestamp *);
 extern ssize_t __splice_from_pipe(struct pipe_inode_info *,
 				  struct splice_desc *, splice_actor *);
+extern ssize_t __splice_from_pipe_printk(struct pipe_inode_info *,
+				  struct splice_desc *, splice_actor_printk *, struct sendfile_timestamp *);
 extern ssize_t splice_to_pipe(struct pipe_inode_info *,
 			      struct splice_pipe_desc *);
 extern ssize_t splice_direct_to_actor(struct file *, struct splice_desc *,
 				      splice_direct_actor *);
+extern ssize_t splice_direct_to_actor_printk(struct file *, struct splice_desc *,
+				      struct sendfile_timestamp *, splice_direct_actor_printk *);
 
 /*
  * for dynamic pipe sizing

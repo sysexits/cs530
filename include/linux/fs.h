@@ -1618,6 +1618,7 @@ struct file_operations {
 	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
 	ssize_t (*read_iter) (struct kiocb *, struct iov_iter *);
 	ssize_t (*write_iter) (struct kiocb *, struct iov_iter *);
+	ssize_t (*write_iter_printk) (struct kiocb *, struct iov_iter *, struct sendfile_timestamp *);
 	int (*iterate) (struct file *, struct dir_context *);
 	unsigned int (*poll) (struct file *, struct poll_table_struct *);
 	long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
@@ -1631,10 +1632,12 @@ struct file_operations {
 	int (*fasync) (int, struct file *, int);
 	int (*lock) (struct file *, int, struct file_lock *);
 	ssize_t (*sendpage) (struct file *, struct page *, int, size_t, loff_t *, int);
+	ssize_t (*sendpage_printk) (struct file *, struct page *, int, size_t, loff_t *, int, struct sendfile_timestamp *);
 	unsigned long (*get_unmapped_area)(struct file *, unsigned long, unsigned long, unsigned long, unsigned long);
 	int (*check_flags)(int);
 	int (*flock) (struct file *, int, struct file_lock *);
 	ssize_t (*splice_write)(struct pipe_inode_info *, struct file *, loff_t *, size_t, unsigned int);
+	ssize_t (*splice_write_printk)(struct pipe_inode_info *, struct file *, loff_t *, size_t, unsigned int, struct sendfile_timestamp *);
 	ssize_t (*splice_read)(struct file *, loff_t *, struct pipe_inode_info *, size_t, unsigned int);
 	int (*setlease)(struct file *, long, struct file_lock **, void **);
 	long (*fallocate)(struct file *file, int mode, loff_t offset,
@@ -2544,6 +2547,7 @@ extern int do_pipe_flags(int *, int);
 extern int kernel_read(struct file *, loff_t, char *, unsigned long);
 extern ssize_t kernel_write(struct file *, const char *, size_t, loff_t);
 extern ssize_t __kernel_write(struct file *, const char *, size_t, loff_t *);
+extern ssize_t __kernel_write_printk(struct file *, const char *, size_t, loff_t *, struct sendfile_timestamp *);
 extern struct file * open_exec(const char *);
  
 /* fs/dcache.c -- generic fs support functions */
@@ -2639,11 +2643,15 @@ extern ssize_t generic_write_checks(struct kiocb *, struct iov_iter *);
 extern ssize_t generic_file_read_iter(struct kiocb *, struct iov_iter *);
 extern ssize_t __generic_file_write_iter(struct kiocb *, struct iov_iter *);
 extern ssize_t generic_file_write_iter(struct kiocb *, struct iov_iter *);
+extern ssize_t __generic_file_write_iter_printk(struct kiocb *, struct iov_iter *, struct sendfile_timestamp *);
+extern ssize_t generic_file_write_iter_printk(struct kiocb *, struct iov_iter *, struct sendfile_timestamp *);
 extern ssize_t generic_file_direct_write(struct kiocb *, struct iov_iter *, loff_t);
 extern ssize_t generic_perform_write(struct file *, struct iov_iter *, loff_t);
 
 ssize_t vfs_iter_read(struct file *file, struct iov_iter *iter, loff_t *ppos);
 ssize_t vfs_iter_write(struct file *file, struct iov_iter *iter, loff_t *ppos);
+ssize_t vfs_iter_write_printk(struct file *file, struct iov_iter *iter, loff_t *ppos, struct sendfile_timestamp *ts);
+
 
 /* fs/block_dev.c */
 extern ssize_t blkdev_read_iter(struct kiocb *iocb, struct iov_iter *to);
@@ -2659,8 +2667,12 @@ extern ssize_t default_file_splice_read(struct file *, loff_t *,
 		struct pipe_inode_info *, size_t, unsigned int);
 extern ssize_t iter_file_splice_write(struct pipe_inode_info *,
 		struct file *, loff_t *, size_t, unsigned int);
+extern ssize_t iter_file_splice_write_printk(struct pipe_inode_info *,
+		struct file *, loff_t *, size_t, unsigned int, struct sendfile_timestamp *);
 extern ssize_t generic_splice_sendpage(struct pipe_inode_info *pipe,
 		struct file *out, loff_t *, size_t len, unsigned int flags);
+extern ssize_t generic_splice_sendpage_printk(struct pipe_inode_info *pipe,
+		struct file *out, loff_t *, size_t len, unsigned int flags, struct sendfile_timestamp *);
 extern long do_splice_direct(struct file *in, loff_t *ppos, struct file *out,
 		loff_t *opos, size_t len, unsigned int flags);
 extern long do_splice_direct_printk(struct file *in, loff_t *ppos, struct file *out,

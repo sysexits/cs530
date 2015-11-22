@@ -8,6 +8,9 @@
 #define __printk_timestamp(field, ident) \
 	if(ts->field.before) printk(KERN_ALERT "cs530\tstat\t%s\t%d\t%llu\n", ident, ts->field.value, ts->field.after - ts->field.before);
 
+#define __printk_timestamps(field, ind, ident) \
+	if(ts->field[ind].before) printk(KERN_ALERT "cs530\tstat\t%s[%d]\t%d\t%llu\n", ident, ind, ts->field[ind].value, ts->field[ind].after - ts->field[ind].before);
+
 #include <linux/export.h>
 #include <linux/mm.h>
 #include <linux/errno.h>
@@ -25,6 +28,33 @@
 #include <linux/timing.h>
 
 static void init_timestamp(struct stat_timestamp *ts){
+	int i;
+	ts->pathlookupat_count = 0;
+	ts->pathwalk_loop_count = 0;
+	ts->lookupat_loop_count = 0;
+	ts->pathwalk_loop_count = 0;
+	ts->lookupat_pathinit.before = 0;
+	for(i=0; i<3; i++){
+		ts->lookupat_pathwalk_hash[i].before = 0;
+		// ts->lookupat_pathwalk_getlink[i].before = 0;
+		ts->lookupat_pathwalk_np[i].before = 0;
+		ts->lookupat_pathwalk_component[i].before = 0;
+		ts->lookupat_pathwalk_loop[i].before = 0;
+	}
+	ts->lookupat_loop_pathwalk.before = 0;
+	ts->lookupat_last_component_fast.before = 0;
+	ts->component_slow_lock.before = 0;
+	ts->component_slow_hash_cache.before = 0;
+	ts->real_lookup.before = 0;
+	ts->d_alloc.before = 0;
+	ts->component_slow_hash_real.before = 0;
+	ts->component_slow_hash.before = 0;
+	ts->component_slow_unlock.before = 0;
+	ts->lookupat_last_component_slow.before = 0;
+	ts->lookupat_loop_last.before = 0;
+	ts->lookupat_loop.before = 0;
+	ts->lookupat_complete.before = 0;
+	ts->lookupat_terminate.before = 0;
 	ts->vfs_fstatat_userpath_lookup_setnameidata.before = 0;
 	ts->vfs_fstatat_userpath_lookup_pathlookupat.before = 0;
 	ts->vfs_fstatat_userpath_lookup_auditinode.before = 0;
@@ -38,16 +68,40 @@ static void init_timestamp(struct stat_timestamp *ts){
 }
 
 static void printk_timestamp(struct stat_timestamp *ts){
-	__printk_timestamp(vfs_fstatat_userpath_lookup_setnameidata, "vfs_fstatat user_path_at lookup set_nameidata");
+	int i;
+	printk(KERN_ALERT "cs530\tstat\tlookupat_loop_count\t%d\n", ts->pathwalk_loop_count);
+	__printk_timestamp(lookupat_pathinit, "... path_lookupat pathinit");
+	for(i=0; i<3; i++){
+		__printk_timestamps(lookupat_pathwalk_hash, i, "... pathwalk hash");
+		__printk_timestamps(lookupat_pathwalk_np, i, "... pathwalk nameproc");
+		__printk_timestamps(lookupat_pathwalk_component, i, "... pathwalk component");
+		// __printk_timestamps(lookupat_pathwalk_getlink, i, "... pathwalk getlink");
+		__printk_timestamps(lookupat_pathwalk_loop, i, "... pathwalk loop");
+	}
+	__printk_timestamp(lookupat_loop_pathwalk, "... loop pathwalk");
+	__printk_timestamp(lookupat_last_component_fast, "... last c fast");
+	__printk_timestamp(component_slow_lock, "... c slow lock");
+	__printk_timestamp(real_lookup, "... real lookup");
+	__printk_timestamp(d_alloc, "... d_alloc");
+	__printk_timestamp(component_slow_hash_cache, "... c slow hash cache");
+	__printk_timestamp(component_slow_hash_real, "... c slow hash real");
+	__printk_timestamp(component_slow_hash, "... c slow hash");
+	__printk_timestamp(component_slow_unlock, "... c slow unlock");
+	__printk_timestamp(lookupat_last_component_slow, "... last c slow");
+	__printk_timestamp(lookupat_loop_last, "... loop last");
+	__printk_timestamp(lookupat_loop, "... path_lookupat loop");
+	__printk_timestamp(lookupat_complete, "... path_lookupat complete");
+	__printk_timestamp(lookupat_terminate, "... path_lookupat terminate");
+	// __printk_timestamp(vfs_fstatat_userpath_lookup_setnameidata, "vfs_fstatat user_path_at lookup set_nameidata");
 	__printk_timestamp(vfs_fstatat_userpath_lookup_pathlookupat, "vfs_fstatat user_path_at lookup path_lookupat");
-	__printk_timestamp(vfs_fstatat_userpath_lookup_auditinode, "vfs_fstatat user_path_at lookup audit_inode");
-	__printk_timestamp(vfs_fstatat_userpath_lookup_putname, "vfs_fstatat user_path_at lookup putname");
-	__printk_timestamp(vfs_fstatat_userpath, "vfs_fstatat user_path_at");
-	__printk_timestamp(vfs_fstatat_getattr_getattr, "vfs_fstatat getattr getattr");
-	__printk_timestamp(vfs_fstatat_getattr_fillattr, "vfs_fstatat getattr fillattr");
-	__printk_timestamp(vfs_fstatat_getattr, "vfs_fstatat getattr");
+	// __printk_timestamp(vfs_fstatat_userpath_lookup_auditinode, "vfs_fstatat user_path_at lookup audit_inode");
+	// __printk_timestamp(vfs_fstatat_userpath_lookup_putname, "vfs_fstatat user_path_at lookup putname");
+	// __printk_timestamp(vfs_fstatat_userpath, "vfs_fstatat user_path_at");
+	// __printk_timestamp(vfs_fstatat_getattr_getattr, "vfs_fstatat getattr getattr");
+	// __printk_timestamp(vfs_fstatat_getattr_fillattr, "vfs_fstatat getattr fillattr");
+	// __printk_timestamp(vfs_fstatat_getattr, "vfs_fstatat getattr");
 	__printk_timestamp(vfs_stat, "vfs_stat");
-	__printk_timestamp(cp_stat, "cp_stat");
+	// __printk_timestamp(cp_stat, "cp_stat");
 }
 
 void generic_fillattr(struct inode *inode, struct kstat *stat)

@@ -2348,6 +2348,7 @@ struct proto tcp_prot = {
 	.recvmsg		= tcp_recvmsg,
 	.sendmsg		= tcp_sendmsg,
 	.sendpage		= tcp_sendpage,
+	.sendpage_printk	= tcp_sendpage_printk,
 	.backlog_rcv		= tcp_v4_do_rcv,
 	.release_cb		= tcp_release_cb,
 	.hash			= inet_hash,

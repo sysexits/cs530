@@ -4,6 +4,7 @@
 #include <net/udplite.h>
 #include <net/protocol.h>
 #include <net/inet_common.h>
+#include <linux/timing.h>
 
 int __udp4_lib_rcv(struct sk_buff *, struct udp_table *, int);
 void __udp4_lib_err(struct sk_buff *, u32, struct udp_table *);
@@ -25,6 +26,8 @@ int udp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int noblock,
 		int flags, int *addr_len);
 int udp_sendpage(struct sock *sk, struct page *page, int offset, size_t size,
 		 int flags);
+int udp_sendpage_printk(struct sock *sk, struct page *page, int offset, size_t size,
+		 int flags, struct sendfile_timestamp *ts);
 int udp_queue_rcv_skb(struct sock *sk, struct sk_buff *skb);
 void udp_destroy_sock(struct sock *sk);
 

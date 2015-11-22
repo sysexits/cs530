@@ -50,6 +50,7 @@ struct proto 	udplite_prot = {
 	.sendmsg	   = udp_sendmsg,
 	.recvmsg	   = udp_recvmsg,
 	.sendpage	   = udp_sendpage,
+	.sendpage_printk   = udp_sendpage_printk,
 	.backlog_rcv	   = udp_queue_rcv_skb,
 	.hash		   = udp_lib_hash,
 	.unhash		   = udp_lib_unhash,

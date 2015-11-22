@@ -721,6 +721,35 @@ static int pipe_to_sendpage(struct pipe_inode_info *pipe,
 				    sd->len, &pos, more);
 }
 
+/*
+ * Send 'sd->len' bytes to socket from 'sd->file' at position 'sd->pos'
+ * using sendpage(). Return the number of bytes sent.
+ */
+static int pipe_to_sendpage_printk(struct pipe_inode_info *pipe,
+			    struct pipe_buffer *buf, struct splice_desc *sd,
+			    struct sendfile_timestamp *ts)
+{
+	ssize_t ret;
+	struct file *file = sd->u.file;
+	loff_t pos = sd->pos;
+	int more;
+
+	if (!likely(file->f_op->sendpage))
+		return -EINVAL;
+
+	more = (sd->flags & SPLICE_F_MORE) ? MSG_MORE : 0;
+
+	if (sd->len < sd->total_len && pipe->nrbufs > 1)
+		more |= MSG_SENDPAGE_NOTLAST;
+
+	ts->order += 1;
+	sendfile_tp_time(&ts->sendpage, ts->order);
+	ret = file->f_op->sendpage_printk(file, buf->page, buf->offset,
+				    sd->len, &pos, more, ts);
+	sendfile_tp_timeEnd(&ts->sendpage, ret);
+	return ret;
+}
+
 static void wakeup_pipe_writers(struct pipe_inode_info *pipe)
 {
 	smp_mb();
@@ -770,6 +799,78 @@ static int splice_from_pipe_feed(struct pipe_inode_info *pipe, struct splice_des
 		}
 
 		ret = actor(pipe, buf, sd);
+		if (ret <= 0)
+			return ret;
+
+		buf->offset += ret;
+		buf->len -= ret;
+
+		sd->num_spliced += ret;
+		sd->len -= ret;
+		sd->pos += ret;
+		sd->total_len -= ret;
+
+		if (!buf->len) {
+			buf->ops = NULL;
+			ops->release(pipe, buf);
+			pipe->curbuf = (pipe->curbuf + 1) & (pipe->buffers - 1);
+			pipe->nrbufs--;
+			if (pipe->files)
+				sd->need_wakeup = true;
+		}
+
+		if (!sd->total_len)
+			return 0;
+	}
+
+	return 1;
+}
+
+/**
+ * splice_from_pipe_feed_printk - feed available data from a pipe to a file
+ * @pipe:	pipe to splice from
+ * @sd:		information to @actor
+ * @actor:	handler that splices the data
+ *
+ * Description:
+ *    This function loops over the pipe and calls @actor to do the
+ *    actual moving of a single struct pipe_buffer to the desired
+ *    destination.  It returns when there's no more buffers left in
+ *    the pipe or if the requested number of bytes (@sd->total_len)
+ *    have been copied.  It returns a positive number (one) if the
+ *    pipe needs to be filled with more data, zero if the required
+ *    number of bytes have been copied and -errno on error.
+ *
+ *    This, together with splice_from_pipe_{begin,end,next}, may be
+ *    used to implement the functionality of __splice_from_pipe() when
+ *    locking is required around copying the pipe buffers to the
+ *    destination.
+ */
+static int splice_from_pipe_feed_printk(struct pipe_inode_info *pipe, struct splice_desc *sd,
+			  splice_actor_printk *actor, struct sendfile_timestamp *ts)
+{
+	int ret;
+
+	while (pipe->nrbufs) {
+		struct pipe_buffer *buf = pipe->bufs + pipe->curbuf;
+		const struct pipe_buf_operations *ops = buf->ops;
+
+		sd->len = buf->len;
+		if (sd->len > sd->total_len)
+			sd->len = sd->total_len;
+
+		ret = buf->ops->confirm(pipe, buf);
+		if (unlikely(ret)) {
+			if (ret == -ENODATA)
+				ret = 0;
+			return ret;
+		}
+
+		ts->order += 1;
+		sendfile_tp_time(&ts->dsd_sdta_dsf_sfp_write_pipe_buf_internal, ts->order);
+		ret = actor(pipe, buf, sd, ts);
+		sendfile_tp_timeEnd(&ts->dsd_sdta_dsf_sfp_write_pipe_buf_internal, ret);
+		
 		if (ret <= 0)
 			return ret;
 
@@ -895,6 +996,36 @@ ssize_t __splice_from_pipe(struct pipe_inode_info *pipe, struct splice_desc *sd,
 EXPORT_SYMBOL(__splice_from_pipe);
 
 /**
+ * __splice_from_pipe_printk - splice data from a pipe to given actor
+ * @pipe:	pipe to splice from
+ * @sd:		information to @actor
+ * @actor:	handler that splices the data
+ *
+ * Description:
+ *    This function does little more than loop over the pipe and call
+ *    @actor to do the actual moving of a single struct pipe_buffer to
+ *    the desired destination. See pipe_to_file, pipe_to_sendpage, or
+ *    pipe_to_user.
+ *
+ */
+ssize_t __splice_from_pipe_printk(struct pipe_inode_info *pipe, struct splice_desc *sd,
+			   splice_actor_printk *actor, struct sendfile_timestamp *ts)
+{
+	int ret;
+
+	splice_from_pipe_begin(sd);
+	do {
+		ret = splice_from_pipe_next(pipe, sd);
+		if (ret > 0)
+			ret = splice_from_pipe_feed_printk(pipe, sd, actor, ts);
+	} while (ret > 0);
+	splice_from_pipe_end(pipe, sd);
+
+	return sd->num_spliced ? sd->num_spliced : ret;
+}
+EXPORT_SYMBOL(__splice_from_pipe_printk);
+
+/**
  * splice_from_pipe - splice data from a pipe to a file
  * @pipe:	pipe to splice from
  * @out:	file to splice to
@@ -926,6 +1057,49 @@ ssize_t splice_from_pipe(struct pipe_inode_info *pipe, struct file *out,
 
 	return ret;
 }
+
+/**
+ * splice_from_pipe_printk - splice data from a pipe to a file
+ * @pipe:	pipe to splice from
+ * @out:	file to splice to
+ * @ppos:	position in @out
+ * @len:	how many bytes to splice
+ * @flags:	splice modifier flags
+ * @actor:	handler that splices the data
+ *
+ * Description:
+ *    See __splice_from_pipe. This function locks the pipe inode,
+ *    otherwise it's identical to __splice_from_pipe().
+ *
+ */
+ssize_t splice_from_pipe_printk(struct pipe_inode_info *pipe, struct file *out,
+			 loff_t *ppos, size_t len, unsigned int flags,
+			 splice_actor_printk *actor, struct sendfile_timestamp *ts)
+{
+	ssize_t ret;
+	struct splice_desc sd = {
+		.total_len = len,
+		.flags = flags,
+		.pos = *ppos,
+		.u.file = out,
+	};
+
+	ts->order += 1;
+	sendfile_tp_time(&ts->dsd_sdta_dsf_sfp_spinlock, ts->order);
+	pipe_lock(pipe);
+	ts->order += 1;
+	sendfile_tp_time(&ts->dsd_sdta_dsf_sfp_internal, ts->order);
+	ret = __splice_from_pipe_printk(pipe, &sd, actor, ts);
+	sendfile_tp_timeEnd(&ts->dsd_sdta_dsf_sfp_internal, ret);
+	sendfile_tp_hwPerf(&ts->dsd_sdta_dsf_sfp_internal);
+	pipe_unlock(pipe);
+	sendfile_tp_timeEnd(&ts->dsd_sdta_dsf_sfp_spinlock, ret);
+	sendfile_tp_hwPerf(&ts->dsd_sdta_dsf_sfp_spinlock);
+
+	return ret;
+}
+
+
 
 /**
  * iter_file_splice_write - splice data from a pipe to a file
@@ -1051,6 +1225,135 @@ done:
 
 EXPORT_SYMBOL(iter_file_splice_write);
 
+/**
+ * iter_file_splice_write_printk - splice data from a pipe to a file
+ * @pipe:	pipe info
+ * @out:	file to write to
+ * @ppos:	position in @out
+ * @len:	number of bytes to splice
+ * @flags:	splice modifier flags
+ *
+ * Description:
+ *    Will either move or copy pages (determined by @flags options) from
+ *    the given pipe inode to the given file.
+ *    This one is ->write_iter-based.
+ *
+ */
+ssize_t
+iter_file_splice_write_printk(struct pipe_inode_info *pipe, struct file *out,
+			  loff_t *ppos, size_t len, unsigned int flags,
+			  struct sendfile_timestamp *ts)
+{
+	struct splice_desc sd = {
+		.total_len = len,
+		.flags = flags,
+		.pos = *ppos,
+		.u.file = out,
+	};
+	int nbufs = pipe->buffers;
+	struct bio_vec *array = kcalloc(nbufs, sizeof(struct bio_vec),
+					GFP_KERNEL);
+	ssize_t ret;
+
+	if (unlikely(!array))
+		return -ENOMEM;
+
+	pipe_lock(pipe);
+
+	splice_from_pipe_begin(&sd);
+	while (sd.total_len) {
+		struct iov_iter from;
+		size_t left;
+		int n, idx;
+
+		ret = splice_from_pipe_next(pipe, &sd);
+		if (ret <= 0)
+			break;
+
+		if (unlikely(nbufs < pipe->buffers)) {
+			kfree(array);
+			nbufs = pipe->buffers;
+			array = kcalloc(nbufs, sizeof(struct bio_vec),
+					GFP_KERNEL);
+			if (!array) {
+				ret = -ENOMEM;
+				break;
+			}
+		}
+
+		/* build the vector */
+		left = sd.total_len;
+		for (n = 0, idx = pipe->curbuf; left && n < pipe->nrbufs; n++, idx++) {
+			struct pipe_buffer *buf = pipe->bufs + idx;
+			size_t this_len = buf->len;
+
+			if (this_len > left)
+				this_len = left;
+
+			if (idx == pipe->buffers - 1)
+				idx = -1;
+
+			ret = buf->ops->confirm(pipe, buf);
+			if (unlikely(ret)) {
+				if (ret == -ENODATA)
+					ret = 0;
+				goto done;
+			}
+
+			array[n].bv_page = buf->page;
+			array[n].bv_len = this_len;
+			array[n].bv_offset = buf->offset;
+			left -= this_len;
+		}
+
+		iov_iter_bvec(&from, ITER_BVEC | WRITE, array, n,
+			      sd.total_len - left);
+		sendfile_tp_time(&ts->vfs_iter_write, ts->order);
+		ret = vfs_iter_write_printk(out, &from, &sd.pos, ts);
+		sendfile_tp_timeEnd(&ts->vfs_iter_write, ret);
+		if (ret <= 0)
+			break;
+
+		sd.num_spliced += ret;
+		sd.total_len -= ret;
+		*ppos = sd.pos;
+
+		/* dismiss the fully eaten buffers, adjust the partial one */
+		while (ret) {
+			struct pipe_buffer *buf = pipe->bufs + pipe->curbuf;
+			if (ret >= buf->len) {
+				const struct pipe_buf_operations *ops = buf->ops;
+				ret -= buf->len;
+				buf->len = 0;
+				buf->ops = NULL;
+				ops->release(pipe, buf);
+				pipe->curbuf = (pipe->curbuf + 1) & (pipe->buffers - 1);
+				pipe->nrbufs--;
+				if (pipe->files)
+					sd.need_wakeup = true;
+			} else {
+				buf->offset += ret;
+				buf->len -= ret;
+				ret = 0;
+			}
+		}
+	}
+done:
+	kfree(array);
+	splice_from_pipe_end(pipe, &sd);
+
+	pipe_unlock(pipe);
+
+	if (sd.num_spliced)
+		ret = sd.num_spliced;
+
+	return ret;
+}
+
+EXPORT_SYMBOL(iter_file_splice_write_printk);
+
+
+
 static int write_pipe_buf(struct pipe_inode_info *pipe, struct pipe_buffer *buf,
 			  struct splice_desc *sd)
 {
@@ -1065,6 +1368,22 @@ static int write_pipe_buf(struct pipe_inode_info *pipe, struct pipe_buffer *buf,
 	return ret;
 }
 
+static int write_pipe_buf_printk(struct pipe_inode_info *pipe, struct pipe_buffer *buf,
+			  struct splice_desc *sd, struct sendfile_timestamp *ts)
+{
+	int ret;
+	void *data;
+	loff_t tmp = sd->pos;
+
+	data = kmap(buf->page);
+	ts->order += 1;
+	sendfile_tp_time(&ts->dsd_sdta_dsf_sfp_kernel_write, ts->order);
+	ret = __kernel_write_printk(sd->u.file, data + buf->offset, sd->len, &tmp, ts);
+	sendfile_tp_timeEnd(&ts->dsd_sdta_dsf_sfp_kernel_write, ret);
+	kunmap(buf->page);
+	return ret;
+}
+
 static ssize_t default_file_splice_write(struct pipe_inode_info *pipe,
 					 struct file *out, loff_t *ppos,
 					 size_t len, unsigned int flags)
@@ -1072,6 +1391,24 @@ static ssize_t default_file_splice_write(struct pipe_inode_info *pipe,
 	ssize_t ret;
 
 	ret = splice_from_pipe(pipe, out, ppos, len, flags, write_pipe_buf);
+	if (ret > 0)
+		*ppos += ret;
+
+	return ret;
+}
+
+static ssize_t default_file_splice_write_printk(struct pipe_inode_info *pipe,
+					 struct file *out, loff_t *ppos,
+					 size_t len, unsigned int flags,
+					 struct sendfile_timestamp *ts)
+{
+	ssize_t ret;
+
+	ts->order += 1;
+	sendfile_tp_time(&ts->dsd_sdta_dsf_splice_from_pipe, ts->order);
+	ret = splice_from_pipe_printk(pipe, out, ppos, len, flags, write_pipe_buf_printk, ts);
+	sendfile_tp_timeEnd(&ts->dsd_sdta_dsf_splice_from_pipe, ret);
+	sendfile_tp_hwPerf(&ts->dsd_sdta_dsf_splice_from_pipe);
 	if (ret > 0)
 		*ppos += ret;
 
@@ -1099,6 +1436,34 @@ ssize_t generic_splice_sendpage(struct pipe_inode_info *pipe, struct file *out,
 
 EXPORT_SYMBOL(generic_splice_sendpage);
 
+/**
+ * generic_splice_sendpage_printk - splice data from a pipe to a socket
+ * @pipe:	pipe to splice from
+ * @out:	socket to write to
+ * @ppos:	position in @out
+ * @len:	number of bytes to splice
+ * @flags:	splice modifier flags
+ *
+ * Description:
+ *    Will send @len bytes from the pipe to a network socket. No data copying
+ *    is involved.
+ *
+ */
+ssize_t generic_splice_sendpage_printk(struct pipe_inode_info *pipe, struct file *out,
+				loff_t *ppos, size_t len, unsigned int flags, struct sendfile_timestamp *ts)
+{
+	ssize_t ret;
+	ts->order += 1;
+	sendfile_tp_time(&ts->splice_from_pipe, ts->order);
+	ret = splice_from_pipe_printk(pipe, out, ppos, len, flags, pipe_to_sendpage_printk, ts);
+	sendfile_tp_timeEnd(&ts->splice_from_pipe, ret);
+	return ret;
+}
+
+EXPORT_SYMBOL(generic_splice_sendpage_printk);
+
+
+
 /*
  * Attempt to initiate a splice from pipe to file.
  */
@@ -1115,6 +1480,29 @@ static long do_splice_from(struct pipe_inode_info *pipe, struct file *out,
 
 	return splice_write(pipe, out, ppos, len, flags);
 }
+
+
+/*
+ * Attempt to initiate a splice from pipe to file.
+ */
+static long do_splice_from_printk(struct pipe_inode_info *pipe, struct file *out,
+			   loff_t *ppos, size_t len, unsigned int flags,
+			   struct sendfile_timestamp *ts)
+{
+	ssize_t ret;
+	ssize_t (*splice_write_printk)(struct pipe_inode_info *, struct file *,
+				loff_t *, size_t, unsigned int, struct sendfile_timestamp *);
+
+	if (out->f_op->splice_write_printk)
+		splice_write_printk = out->f_op->splice_write_printk;
+	else
+		splice_write_printk = default_file_splice_write_printk;
+
+	ret = splice_write_printk(pipe, out, ppos, len, flags, ts);
+	return ret;
+}
+
+
 
 /*
  * Attempt to initiate a splice from a file to a pipe.
@@ -1274,6 +1662,145 @@ out_release:
 }
 EXPORT_SYMBOL(splice_direct_to_actor);
 
+/**
+ * splice_direct_to_actor_printk - splices data directly between two non-pipes
+ * @in:		file to splice from
+ * @sd:		actor information on where to splice to
+ * @actor:	handles the data splicing
+ *
+ * Description:
+ *    This is a special case helper to splice directly between two
+ *    points, without requiring an explicit pipe. Internally an allocated
+ *    pipe is cached in the process, and reused during the lifetime of
+ *    that process.
+ *
+ */
+ssize_t splice_direct_to_actor_printk(struct file *in, struct splice_desc *sd, 
+			       struct sendfile_timestamp *ts, splice_direct_actor_printk *actor)
+{
+	struct pipe_inode_info *pipe;
+	long ret, bytes;
+	umode_t i_mode;
+	size_t len;
+	int i, flags, more;
+
+	/*
+	 * We require the input being a regular file, as we don't want to
+	 * randomly drop data for eg socket -> socket splicing. Use the
+	 * piped splicing for that!
+	 */
+	i_mode = file_inode(in)->i_mode;
+	if (unlikely(!S_ISREG(i_mode) && !S_ISBLK(i_mode)))
+		return -EINVAL;
+
+	/*
+	 * neither in nor out is a pipe, setup an internal pipe attached to
+	 * 'out' and transfer the wanted data from 'in' to 'out' through that
+	 */
+	pipe = current->splice_pipe;
+	if (unlikely(!pipe)) {
+		pipe = alloc_pipe_info();
+		if (!pipe)
+			return -ENOMEM;
+
+		/*
+		 * We don't have an immediate reader, but we'll read the stuff
+		 * out of the pipe right after the splice_to_pipe(). So set
+		 * PIPE_READERS appropriately.
+		 */
+		pipe->readers = 1;
+
+		current->splice_pipe = pipe;
+	}
+
+	/*
+	 * Do the splice.
+	 */
+	ret = 0;
+	bytes = 0;
+	len = sd->total_len;
+	flags = sd->flags;
+
+	/*
+	 * Don't block on output, we have to drain the direct pipe.
+	 */
+	sd->flags &= ~SPLICE_F_NONBLOCK;
+	more = sd->flags & SPLICE_F_MORE;
+
+	while (len) {
+		size_t read_len;
+		loff_t pos = sd->pos, prev_pos = pos;
+
+
+		ts->order += 1;
+		sendfile_tp_time(&ts->dsd_sdta_do_splice_to, ts->order);
+		ret = do_splice_to(in, &pos, pipe, len, flags);
+		sendfile_tp_timeEnd(&ts->dsd_sdta_do_splice_to, ret);
+		sendfile_tp_hwPerf(&ts->dsd_sdta_do_splice_to);
+		if (unlikely(ret <= 0))
+			goto out_release;
+
+		read_len = ret;
+		sd->total_len = read_len;
+
+		/*
+		 * If more data is pending, set SPLICE_F_MORE
+		 * If this is the last data and SPLICE_F_MORE was not set
+		 * initially, clears it.
+		 */
+		if (read_len < len)
+			sd->flags |= SPLICE_F_MORE;
+		else if (!more)
+			sd->flags &= ~SPLICE_F_MORE;
+		/*
+		 * NOTE: nonblocking mode only applies to the input. We
+		 * must not do the output in nonblocking mode as then we
+		 * could get stuck data in the internal pipe:
+		 */
+		ret = actor(pipe, sd, ts);
+		if (unlikely(ret <= 0)) {
+			sd->pos = prev_pos;
+			goto out_release;
+		}
+
+		bytes += ret;
+		len -= ret;
+		sd->pos = pos;
+
+		if (ret < read_len) {
+			sd->pos = prev_pos + ret;
+			goto out_release;
+		}
+	}
+
+done:
+	pipe->nrbufs = pipe->curbuf = 0;
+	file_accessed(in);
+	return bytes;
+
+out_release:
+	/*
+	 * If we did an incomplete transfer we must release
+	 * the pipe buffers in question:
+	 */
+	for (i = 0; i < pipe->buffers; i++) {
+		struct pipe_buffer *buf = pipe->bufs + i;
+
+		if (buf->ops) {
+			buf->ops->release(pipe, buf);
+			buf->ops = NULL;
+		}
+	}
+
+	if (!bytes)
+		bytes = ret;
+
+	goto done;
+}
+EXPORT_SYMBOL(splice_direct_to_actor_printk);
+
+
+
 static int direct_splice_actor(struct pipe_inode_info *pipe,
 			       struct splice_desc *sd)
 {
@@ -1282,6 +1809,24 @@ static int direct_splice_actor(struct pipe_inode_info *pipe,
 	return do_splice_from(pipe, file, sd->opos, sd->total_len,
 			      sd->flags);
 }
+
+static int direct_splice_actor_printk(struct pipe_inode_info *pipe,
+			       struct splice_desc *sd, struct sendfile_timestamp *ts)
+{
+	int ret;
+	struct file *file = sd->u.file;
+
+	ts->order += 1;
+	sendfile_tp_time(&ts->dsd_sdta_do_splice_from, ts->order);
+	ret = do_splice_from_printk(pipe, file, sd->opos, sd->total_len,
+			      sd->flags, ts);
+	sendfile_tp_timeEnd(&ts->dsd_sdta_do_splice_from, ret);
+	sendfile_tp_hwPerf(&ts->dsd_sdta_do_splice_from);
+
+	return ret;
+}
+
+
 
 /**
  * do_splice_direct - splices data directly between two files
@@ -1366,14 +1911,16 @@ long do_splice_direct_printk(struct file *in, loff_t *ppos, struct file *out,
 	if (unlikely(out->f_flags & O_APPEND))
 		return -EINVAL;
 
-	sendfile_tp_time(&ts->dsd_rw_verify_area);
+	ts->order += 1;
+	sendfile_tp_time(&ts->dsd_rw_verify_area, ts->order);
 	ret = rw_verify_area(WRITE, out, opos, len);
 	sendfile_tp_timeEnd(&ts->dsd_rw_verify_area, ret);
 	if (unlikely(ret < 0))
 		return ret;
 
-	sendfile_tp_time(&ts->dsd_splice_direct_to_actor);
-	ret = splice_direct_to_actor(in, &sd, direct_splice_actor);
+	ts->order += 1;
+	sendfile_tp_time(&ts->dsd_splice_direct_to_actor, ts->order);
+	ret = splice_direct_to_actor_printk(in, &sd, ts, direct_splice_actor_printk);
 	sendfile_tp_timeEnd(&ts->dsd_splice_direct_to_actor, ret);
 	if (ret > 0)
 		*ppos = sd.pos;

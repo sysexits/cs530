@@ -69,6 +69,8 @@
 #include <net/tcp_states.h>
 #include <linux/net_tstamp.h>
 
+#include <linux/timing.h> // add timing
+
 struct cgroup;
 struct cgroup_subsys;
 #ifdef CONFIG_NET
@@ -967,6 +969,8 @@ struct proto {
 					   int *addr_len);
 	int			(*sendpage)(struct sock *sk, struct page *page,
 					int offset, size_t size, int flags);
+	int			(*sendpage_printk)(struct sock *sk, struct page *page,
+					int offset, size_t size, int flags, struct sendfile_timestamp *ts);
 	int			(*bind)(struct sock *sk,
 					struct sockaddr *uaddr, int addr_len);
 

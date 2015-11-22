@@ -121,6 +121,7 @@
 #endif
 #include <net/vrf.h>
 
+#include <linux/timing.h>
 
 /* The inetsw table contains everything that inet_create needs to
  * build a new socket.
@@ -756,6 +757,26 @@ ssize_t inet_sendpage(struct socket *sock, struct page *page, int offset,
 }
 EXPORT_SYMBOL(inet_sendpage);
 
+ssize_t inet_sendpage_printk(struct socket *sock, struct page *page, int offset,
+		      size_t size, int flags, struct sendfile_timestamp *ts)
+{
+	struct sock *sk = sock->sk;
+
+	sock_rps_record_flow(sk);
+
+	/* We may need to bind the socket. */
+	if (!inet_sk(sk)->inet_num && !sk->sk_prot->no_autobind &&
+	    inet_autobind(sk))
+		return -EAGAIN;
+
+	if (sk->sk_prot->sendpage)
+		return sk->sk_prot->sendpage(sk, page, offset, size, flags);
+	return sock_no_sendpage(sock, page, offset, size, flags);
+}
+EXPORT_SYMBOL(inet_sendpage_printk);
+
+
+
 int inet_recvmsg(struct socket *sock, struct msghdr *msg, size_t size,
 		 int flags)
 {
@@ -917,6 +938,7 @@ const struct proto_ops inet_stream_ops = {
 	.recvmsg	   = inet_recvmsg,
 	.mmap		   = sock_no_mmap,
 	.sendpage	   = inet_sendpage,
+	.sendpage_printk   = inet_sendpage_printk,
 	.splice_read	   = tcp_splice_read,
 #ifdef CONFIG_COMPAT
 	.compat_setsockopt = compat_sock_common_setsockopt,
@@ -945,6 +967,7 @@ const struct proto_ops inet_dgram_ops = {
 	.recvmsg	   = inet_recvmsg,
 	.mmap		   = sock_no_mmap,
 	.sendpage	   = inet_sendpage,
+	.sendpage_printk   = inet_sendpage_printk,
 #ifdef CONFIG_COMPAT
 	.compat_setsockopt = compat_sock_common_setsockopt,
 	.compat_getsockopt = compat_sock_common_getsockopt,

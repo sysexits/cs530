@@ -47,6 +47,8 @@
 #include <linux/seq_file.h>
 #include <linux/memcontrol.h>
 
+#include <linux/timing.h>
+
 extern struct inet_hashinfo tcp_hashinfo;
 
 extern struct percpu_counter tcp_orphan_count;
@@ -360,6 +362,8 @@ int tcp_v4_tw_remember_stamp(struct inet_timewait_sock *tw);
 int tcp_sendmsg(struct sock *sk, struct msghdr *msg, size_t size);
 int tcp_sendpage(struct sock *sk, struct page *page, int offset, size_t size,
 		 int flags);
+int tcp_sendpage_printk(struct sock *sk, struct page *page, int offset, size_t size,
+		 int flags, struct sendfile_timestamp *ts);
 void tcp_release_cb(struct sock *sk);
 void tcp_wfree(struct sk_buff *skb);
 void tcp_write_timer_handler(struct sock *sk);

@@ -49,6 +49,7 @@ const struct file_operations ramfs_file_operations = {
 	.fsync			= noop_fsync,
 	.splice_read		= generic_file_splice_read,
 	.splice_write		= iter_file_splice_write,
+	.splice_write_printk	= iter_file_splice_write_printk,
 	.llseek			= generic_file_llseek,
 };
 
