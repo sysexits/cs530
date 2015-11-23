@@ -1,0 +1,334 @@
+<html>
+<head>
+    <meta property="og:site_name" content="Jaehyun Jang - CV" />
+    <meta property="og:title" content="Jaehyun Jang - CV" />
+    <meta property="og:image" content="/img/preview.JPG" />
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,600,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css">
+    <!-- Latest compiled and minified JavaScript -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+    <style>
+        body {
+            font-family: 'Open Sans', sans-serif;
+            font-size: 12pt;
+        }
+
+        body h2 {
+            font-weight: 600;
+            margin-bottom: 1em;
+        }
+        body h3{
+            font-weight: 600;
+            margin-bottom: 0.5em;
+        }
+        body h4 {
+            font-weight: 600;
+        }
+        .navbar {
+            background-color: rgba(0, 0, 0, 0);
+            position: fixed;
+            z-index: 1000;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            box-shadow: none;
+        }
+
+        .navbar h1 {
+            font-size: 2em;
+            color: white;            
+        }
+
+        .navbar a {
+            display: block;
+            float: right;
+            line-height: 60px;
+            color: #333333;
+            font-weight: 600;
+            text-decoration: none;
+            margin-left: 2em;
+        }
+            
+        .menu {
+            margin-right: 1em;
+        }
+            
+        .small-logo-container {
+            padding-top: 60px;
+            height: 60px;
+            overflow: hidden;
+        }
+
+        .header {
+            margin-bottom: 2em;
+            padding: 1em;
+            padding-top: 60px;
+            background-image: url("http://i.imgur.com/blzICNs.png");
+            background-size: cover;
+            color: #000;
+        }
+        .header h2 {
+            font-weight: 700
+        }
+        .header h3 {
+            font-weight: 600
+        }
+        .header a{
+            color: #000;
+        }
+        .vcenter {
+            display: flex;
+            flex-direction: row;
+        }
+        .vcenter > [class^="photo-zone"],
+        .vcenter > [class*=" photo-zone"] {
+          display: flex;
+          align-items: center;
+          justify-content: center; /* Optional, to align inner items
+                                      horizontally inside the column */
+        }
+        .bio {
+            font-weight: bold;
+        }
+        .photo {
+            min-width: 120px;
+            width: 40%;
+            margin-right: 1em;
+            border:3px solid white;
+        }
+        .contentRow {
+            margin-top: 2em;
+        }
+        .contentRow-block {
+            padding-top: 1em;
+            padding-bottom: 1em;
+            border-top: 1px solid #aaaaaa;
+            border-bottom: 1px solid #aaaaaa;
+        }
+        .contentRow-block ~ .contentRow-block {
+            padding-bottom: 1em;
+            border-top: 0px;
+            border-bottom: 1px solid #aaaaaa;
+
+        }
+        .contentRow-year {
+            text-align: right;
+        }
+    </style>
+    <script>
+        $(window).scroll(function() {
+            var navbarColor = "115,189,183";
+            var smallLogoHeight = $('.small-logo').height();
+            var bigLogoHeight = $('.header').height();
+            var navbarHeight = $('.navbar').height();
+
+            var smallLogoEndPos = 0;
+            //var smallLogoEndPos = (navbarHeight - smallLogoHeight) / 2;
+            var smallSpeed = (smallLogoHeight / bigLogoHeight);
+            var ySmall = ($(window).scrollTop() * smallSpeed);
+            var smallPadding = navbarHeight - ySmall;
+            
+            if(smallPadding > navbarHeight) {
+                smallPadding = navbarHeight;
+            }
+            if(smallPadding < smallLogoEndPos) {
+                smallPadding = smallLogoEndPos;
+            }
+            if(smallPadding < 0)
+            {
+                smallPadding = 0;
+            }
+            $('.small-logo-container ').css({
+                "padding-top": smallPadding
+            });
+            
+            var navOpacity = ySmall / smallLogoHeight;
+            if(navOpacity > 1) {
+                navOpacity = 1;
+            }
+            if(navOpacity < 0) {
+                navOpacity = 0;
+            } 
+            var navBackColor = 'rgba(' + navbarColor + ',' + navOpacity + ')';
+            $('.navbar').css({"background-color": navBackColor});
+
+            var shadowOpacity = navOpacity * 0.4;
+            if ( ySmall > 1 ) {
+                    $('.navbar').css({"box-shadow": "0 2px 3px rgba(0,0,0," + shadowOpacity + ")"});
+                      
+            } else {
+                    $('.navbar').css({"box-shadow": "none"});
+            }
+        });
+    </script>
+    <title>Jaehyun Jang - KAIST</title>
+    <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-63347207-2', 'auto');
+  ga('send', 'pageview', {
+      page: '/cv',
+      title: 'Jaehyun Jang - CV'
+  });
+
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="navbar">
+            <div class="menu">
+                <a href="./publication/index.html">Publication</a> 
+                <a href="./index.html">Curriculum Vitae</a>
+            </div>
+            <div class="small-logo-container">
+                <h1 class="small-logo">&nbsp</h1>
+            </div>
+        </div>
+
+        <div class="row header vcenter">
+            <div class="col-xs-8 col-md-8">
+                <div class="bio">
+                    <h2>Jaehyun Jang</h2>
+                    <h3>Master's Candidate, School of Computing</h3>
+                </div>
+                <br>
+                <div>
+                    <address>
+                        <i class="fa fa-building"></i> <b>Office</b><br>
+                        291, Daehak-ro, Yuseong-gu, Daejeon<br>
+                        2413 STE, E3-1 (Computer Graphics and Visualization Lab)
+                    </address>
+                    <address>
+                        <i class="fa fa-envelope"></i> <b>Email (work)</b><br> jaehyunjang (at) cgv.kaist.ac.kr
+                    </address>
+                    <address>
+                        <i class="fa fa-github-square"></i> <b>Github</b><br> <a href="https://github.com/sysexits">sysexits</a>
+                    </address>
+                    <address>
+                        <i class="fa fa-file-text"></i> <b>Full CV</b><br>
+
+                    </address>
+                </div>
+            </div>
+            <div class="col-xs-4 col-md-4 photo-zone">
+                    <img class="img-responsive img-circle pull-right photo" src="http://sysexits.github.io/assets/images/profile.jpg"></img>
+            </div>
+        </div>
+        <div class="cv">
+            <div class="row">
+                <h3><span class="glyphicon glyphicon-list"></span> Research Interests</h3>
+                <i class="fa fa-tags"></i> <b>Research topics</b>: Modeling with data, Multimodal Visualization
+                <br>
+                <br>
+                <p>
+                My primary research interests are in computer graphics and vision.
+                </p>
+            </div>
+            <div class="row contentRow">
+                <h3><i class="fa fa-graduation-cap"></i> Education</h3>
+                <div class="row contentRow-block">
+                    <div class="col-xs-3 col-md-3">
+                        <h4>KAIST</h4>
+                    </div>
+                    <div class="col-xs-6 col-md-6">
+                        Master's candidate of science, Computer Science<br>
+                        <strong>Advisor: Jinah Park</strong>
+                    </div>
+                    <div class="col-xs-3 col-md-3 contentRow-year">
+                        2014-present
+                    </div>
+                </div>
+                <div class="row contentRow-block">
+                    <div class="col-xs-3 col-md-3">
+                        <h4>KAIST</h4>
+                    </div>
+                    <div class="col-xs-6 col-md-6">
+                        Bachelor of Science, Computer Science
+                    </div>
+                    <div class="col-xs-3 col-md-3 contentRow-year">
+                        2010-2014
+                    </div>
+                </div>
+            </div>
+            <div class="row contentRow">
+                <h3><i class="fa fa-black-tie"></i> Working Experience</h3>
+                <div class="row contentRow-block">
+                    <div class="col-xs-3 col-md-3">
+                        <h4>Kiswe Mobile</h4>
+                    </div>
+                    <div class="col-xs-6 col-md-6">
+                        Student Programmer<br>
+                        * NDA
+                    </div>
+                    <div class="col-xs-3 col-md-3 contentRow-year">
+                        June 2014 - May 2015
+                    </div>
+                </div>
+                <div class="row contentRow-block">
+                    <div class="col-xs-3 col-md-3">
+                        <h4>Visual Media Lab,<br>KAIST GSCT</h4>
+                    </div>
+                    <div class="col-xs-6 col-md-6">
+                        Research Intern<br>
+                        <ul>
+                            <li>Developing a facial animation module for pre-viz</li>
+                            <li>Developing heterogeneous kernel for blendshape animation in mobile phone</li>
+                        </ul>
+                        <br>
+                        <i class="fa fa-code"></i> Code: <a href="https://github.com/sysexits/MatrixMultiplicationRS">Matrix Multiplication RS Kernel</a>
+                    </div>
+                    <div class="col-xs-3 col-md-3 contentRow-year">
+                        March 2013 - November 2013
+                    </div>
+                </div>
+                <div class="row contentRow-block">
+                    <div class="col-xs-3 col-md-3">
+                        <h4>Flaskon</h4>
+                    </div>
+                    <div class="col-xs-6 col-md-6">
+                        Client Programmer<br>
+                        Internship program, developing UI/FX of single person shooter game
+                    </div>
+                    <div class="col-xs-3 col-md-3 contentRow-year">
+                        April 2012 - August 2012
+                    </div>
+                </div>
+            </div>
+            <div class="row contentRow">
+                <h3><i class="fa fa-pencil"></i> Teaching Experience</h3>
+                <div class="row contentRow-block">
+                    <div class="col-xs-3 col-md-3">
+                        <h4>CS204</h4>
+                    </div>
+                    <div class="col-xs-6 col-md-6">
+                        Discrete Mathematics
+                    </div>
+                    <div class="col-xs-3 col-md-3 contentRow-year">
+                        Fall, 2015
+                    </div>
+                </div>
+                <div class="row contentRow-block">
+                    <div class="col-xs-3 col-md-3">
+                        <h4>CS580</h4>
+                    </div>
+                    <div class="col-xs-6 col-md-6">
+                        Computer Graphics (Graduate Level)
+                    </div>
+                    <div class="col-xs-3 col-md-3 contentRow-year">
+                        Spring, 2015
+                    </div>
+                </div>
+            </div>
+       </div>
+    </div>
+</body>
+</html>
